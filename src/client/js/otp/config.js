@@ -82,20 +82,20 @@ otp.config = {
      * properties, when set, override that behavioir.
      */
      
-    // initLatLng : new L.LatLng(<lat>, <lng>),
-    // initZoom : 14,
+    initLatLng : new L.LatLng(44.837912, -0.579541),
+    initZoom : 11,
     // minZoom : 10,
     // maxZoom : 20,
     
     /* Whether the map should be moved to contain the full itinerary when a result is received. */
-    zoomToFitResults    : false,
+    zoomToFitResults    : true,
 
     /**
      * Site name / description / branding display options
      */
 
-    siteName            : "My OTP Instance",
-    siteDescription     : "An OpenTripPlanner deployment.",
+    siteName            : "Planificateur de trajets sur l'Aquitaine",
+    siteDescription     : "Une instance d'OpenTripPlanner.",
     logoGraphic         : 'images/otp_logo_darkbg_40px.png',
     // bikeshareName    : "",
     //Enable this if you want to show frontend language chooser
@@ -103,7 +103,7 @@ otp.config = {
 
     showLogo            : true,
     showTitle           : true,
-    showModuleSelector  : true,
+    showModuleSelector  : false,
     metric              : false,
 
 
@@ -125,10 +125,10 @@ otp.config = {
             className : 'otp.modules.multimodal.MultimodalPlannerModule',
             defaultBaseLayer : 'MapQuest OSM',
             isDefault: true
-        },
-        {
-            id : 'analyst',
-            className : 'otp.modules.analyst.AnalystModule'
+//        },
+//        {
+//            id : 'analyst',
+//            className : 'otp.modules.analyst.AnalystModule'
         }
     ],
     
@@ -180,16 +180,16 @@ otp.config = {
 };
 var options = {
 	resGetPath: 'js/otp/locale/__lng__.json',
-	fallbackLng: 'en',
+	fallbackLng: 'fr',
         nsseparator: ';;', //Fixes problem when : is in translation text
         keyseparator: '_|_',
-	preload: ['en'],
+	preload: ['fr'],
         //TODO: Language choosing works only with this disabled
         /*lng: otp.config.locale_short,*/
         /*postProcess: 'add_nekaj', //Adds | around every string that is translated*/
         /*shortcutFunction: 'sprintf',*/
         /*postProcess: 'sprintf',*/
-	debug: true,
+	debug: false,
 	getAsync: false, //TODO: make async
 	fallbackOnEmpty: true,
 };
@@ -300,8 +300,9 @@ otp.config.modes = {
     // IDEA: maybe we start with a big array (like below), and the pull out modes from this array when turning off various modes...
     //TRANSLATORS: Travel by: mode of transport (Used in selection in Travel
     //Options widgets)
-    //    'WALK,BICYCLE_RENT'        :_tr('Rented Bicycle'),
+    "WALK,BICYCLE_RENT"        :_tr('Rented Bicycle'),
     //TRANSLATORS: Travel by: mode of transport (Used in selection in Travel
     //Options widgets)
-    //    'TRANSIT,WALK,BICYCLE_RENT': _tr('Transit & Rented Bicycle')
+    "TRANSIT,WALK,BICYCLE_RENT": _tr('Transit & Rented Bicycle')
     };
+

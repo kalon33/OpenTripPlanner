@@ -30,6 +30,7 @@ import org.opentripplanner.graph_builder.impl.TransitToStreetNetworkGraphBuilder
 import org.opentripplanner.graph_builder.impl.TransitToTaggedStopsGraphBuilderImpl;
 import org.opentripplanner.graph_builder.impl.ned.ElevationGraphBuilderImpl;
 import org.opentripplanner.graph_builder.impl.ned.NEDGridCoverageFactoryImpl;
+import org.opentripplanner.graph_builder.impl.ned.GeotiffGridCoverageFactoryImpl;
 import org.opentripplanner.graph_builder.impl.osm.DefaultWayPropertySetSource;
 import org.opentripplanner.graph_builder.impl.osm.OpenStreetMapGraphBuilderImpl;
 import org.opentripplanner.graph_builder.model.GtfsBundle;
@@ -218,8 +219,8 @@ public class OTPConfigurator {
             graphBuilder.addGraphBuilder(embeddedConfigBuilder);
         }
         if (params.elevation) {
-            File cacheDirectory = new File(params.cacheDirectory, "ned");
-            ElevationGridCoverageFactory gcf = new NEDGridCoverageFactoryImpl(cacheDirectory);
+            File cacheDirectory = new File(params.cacheDirectory, "aquitaine.tiff");
+            ElevationGridCoverageFactory gcf = new GeotiffGridCoverageFactoryImpl(cacheDirectory);
             GraphBuilder elevationBuilder = new ElevationGraphBuilderImpl(gcf);
             graphBuilder.addGraphBuilder(elevationBuilder);
         }

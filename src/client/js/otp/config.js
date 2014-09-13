@@ -127,7 +127,11 @@ otp.config = {
             className : 'otp.modules.multimodal.MultimodalPlannerModule',
             defaultBaseLayer : 'MapQuest OSM',
             isDefault: true
-//        },
+        },
+	{
+	    id : 'bikeshare',
+	    className : 'otp.modules.bikeshare.BikeShareModule',
+//	},
 //        {
 //            id : 'analyst',
 //            className : 'otp.modules.analyst.AnalystModule'

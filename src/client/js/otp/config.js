@@ -95,6 +95,8 @@ otp.config = {
      */
 
     siteName            : "Planificateur de trajets sur l'Aquitaine",
+    bikeshareName : "Réseau VCub", //don't forget comma!
+
     siteDescription     : "Une instance d'OpenTripPlanner.",
     logoGraphic         : 'images/otp_logo_darkbg_40px.png',
     // bikeshareName    : "",

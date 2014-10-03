@@ -29,11 +29,13 @@ import org.opentripplanner.graph_builder.impl.StreetlessStopLinker;
 import org.opentripplanner.graph_builder.impl.TransitToStreetNetworkGraphBuilderImpl;
 import org.opentripplanner.graph_builder.impl.TransitToTaggedStopsGraphBuilderImpl;
 import org.opentripplanner.graph_builder.impl.ned.ElevationGraphBuilderImpl;
+import org.opentripplanner.graph_builder.impl.ned.GeotiffGridCoverageFactoryImpl;
 import org.opentripplanner.graph_builder.impl.ned.NEDGridCoverageFactoryImpl;
 import org.opentripplanner.graph_builder.impl.ned.GeotiffGridCoverageFactoryImpl;
 import org.opentripplanner.graph_builder.impl.osm.DefaultWayPropertySetSource;
 import org.opentripplanner.graph_builder.impl.osm.OpenStreetMapGraphBuilderImpl;
 import org.opentripplanner.graph_builder.model.GtfsBundle;
+import org.opentripplanner.graph_builder.services.DefaultStreetEdgeFactory;
 import org.opentripplanner.graph_builder.services.GraphBuilder;
 import org.opentripplanner.graph_builder.services.ned.ElevationGridCoverageFactory;
 import org.opentripplanner.openstreetmap.impl.AnyFileBasedOpenStreetMapProviderImpl;
@@ -174,11 +176,14 @@ public class OTPConfigurator {
                 osmProviders.add(osmProvider);
             }
             OpenStreetMapGraphBuilderImpl osmBuilder = new OpenStreetMapGraphBuilderImpl(osmProviders);
+            DefaultStreetEdgeFactory streetEdgeFactory = new DefaultStreetEdgeFactory();
+            streetEdgeFactory.useElevationData = params.elevation;
+            osmBuilder.edgeFactory = streetEdgeFactory;
             DefaultWayPropertySetSource defaultWayPropertySetSource = new DefaultWayPropertySetSource();
             osmBuilder.setDefaultWayPropertySetSource(defaultWayPropertySetSource);
             osmBuilder.skipVisibility = params.skipVisibility;
             graphBuilder.addGraphBuilder(osmBuilder);
-            graphBuilder.addGraphBuilder(new PruneFloatingIslands());            
+            graphBuilder.addGraphBuilder(new PruneFloatingIslands());
         }
         if ( hasGTFS ) {
             List<GtfsBundle> gtfsBundles = Lists.newArrayList();

@@ -13,6 +13,7 @@
 
 package com.conveyal.gtfs.model;
 
+import com.conveyal.gtfs.GTFSFeed;
 import org.mapdb.Fun;
 
 import java.io.IOException;
@@ -20,6 +21,7 @@ import java.io.Serializable;
 
 public class StopTime extends Entity implements Serializable {
 
+    /* StopTime cannot directly reference Trips or Stops because they would be serialized into the MapDB. */
     public String trip_id;
     public int    arrival_time;
     public int    departure_time;
@@ -30,34 +32,35 @@ public class StopTime extends Entity implements Serializable {
     public int    drop_off_type;
     public double shape_dist_traveled;
 
-    @Override
-    public Fun.Tuple2 getKey() {
-        return new Fun.Tuple2(trip_id, stop_sequence);
-    }
+    public static class Loader extends Entity.Loader<StopTime> {
 
-    public static class Factory extends Entity.Factory<StopTime> {
-
-        public Factory() {
-            tableName = "stop_times";
-            requiredColumns = new String[] {"trip_id", "stop_sequence"};
+        public Loader(GTFSFeed feed) {
+            super(feed, "stop_times");
         }
 
         @Override
-        public StopTime fromCsv() throws IOException {
+        public void loadOneRow() throws IOException {
             StopTime st = new StopTime();
             st.trip_id        = getStringField("trip_id", true);
             st.arrival_time   = getTimeField("arrival_time");
             st.departure_time = getTimeField("departure_time");
             st.stop_id        = getStringField("stop_id", true);
-            st.stop_sequence  = getIntField("stop_sequence", true);
+            st.stop_sequence  = getIntField("stop_sequence", true, 0, Integer.MAX_VALUE);
             st.stop_headsign  = getStringField("stop_headsign", false);
-            st.pickup_type    = getIntField("pickup_type", false);
-            st.drop_off_type  = getIntField("drop_off_type", false);
-            st.shape_dist_traveled = getDoubleField("shape_dist_traveled", false);
-            return st;
+            st.pickup_type    = getIntField("pickup_type", false, 0, 3); // TODO add ranges as parameters
+            st.drop_off_type  = getIntField("drop_off_type", false, 0, 3);
+            st.shape_dist_traveled = getDoubleField("shape_dist_traveled", false, 0D, Double.MAX_VALUE);
+            st.feed = null; // this could circular-serialize the whole feed
+            feed.stop_times.put(new Fun.Tuple2(st.trip_id, st.stop_sequence), st);
+
+            /*
+              Check referential integrity without storing references. StopTime cannot directly reference Trips or
+              Stops because they would be serialized into the MapDB.
+            */
+            getRefField("trip_id", true, feed.trips);
+            getRefField("stop_id", true, feed.stops);
         }
 
     }
-
 
 }

@@ -111,7 +111,7 @@ public class CommandLineParameters {
     boolean analyst;
 
     @Parameter( names = {"--bindAddress"},
-            description = "enable OTP Analyst extensions")
+            description = "the address of the network interface to bind to. defaults to all interfaces.")
     String bindAddress = "0.0.0.0";
 
     @Parameter( names = { "--securePort"}, validateWith = AvailablePort.class,
@@ -160,6 +160,10 @@ public class CommandLineParameters {
     @Parameter( validateWith = ReadableFile.class, // the remaining parameters in one array
     description = "files") 
     List<File> files = new ArrayList<File>();
+    
+    @Parameter( names = {"--insecure"},
+            description = "allow unauthenticated access to sensitive resources, e.g. /routers")
+    boolean insecure = false;
 
     /** Set some convenience parameters based on other parameters' values. */
     public void infer () {

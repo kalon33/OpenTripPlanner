@@ -33,16 +33,15 @@ import java.util.List;
 import org.opentripplanner.routing.impl.DefaultStreetVertexIndexFactory;
 
 /**
- * Uses the shapes from GTFS to determine which streets buses drive on. This is used for stop linking purposes.
- * It encourages the linker to link to streets where transit actually travels.
+ * Uses the shapes from GTFS to determine which streets buses drive on. This is used to improve the quality of
+ * the stop-to-street linkage. It encourages the linker to link to streets where transit actually travels.
  *
- * GTFS provides a mapping from trips->shapes.
- * This module provides a mapping from stops->trips and shapes->edges.
+ * GTFS provides a mapping from trips->shapes. This module provides a mapping from stops->trips and shapes->edges.
  * Then transitively we get a mapping from stop->edges.
  * The edges that "belong" to a stop are favored when linking that stop to the street network.
  */
-public class MapBuilder implements GraphBuilder {
-    private static final Logger log = LoggerFactory.getLogger(MapBuilder.class);
+public class BusRouteStreetMatcher implements GraphBuilder {
+    private static final Logger log = LoggerFactory.getLogger(BusRouteStreetMatcher.class);
 
     public List<String> provides() {
         return Arrays.asList("edge matching");
@@ -66,13 +65,13 @@ public class MapBuilder implements GraphBuilder {
         StreetMatcher matcher = new StreetMatcher(graph);
         EdgesForRoute edgesForRoute = new EdgesForRoute();
         extra.put(EdgesForRoute.class, edgesForRoute);
-        log.info("matching route variants to street edges...");
+        log.info("Finding corresponding street edges for trip patterns...");
         // Why do we need to iterate over the routes? Why not just patterns?
         for (Route route : graph.index.routeForId.values()) {
             for (TripPattern pattern : graph.index.patternsForRoute.get(route)) {
                 if (pattern.mode == TraverseMode.BUS) {
                     /* we can only match geometry to streets on bus routes */
-                    log.debug("Matching {} ncoords={}", pattern, pattern.getGeometry().getNumPoints());
+                    log.info("Matching {}", pattern);
                     List<Edge> edges = matcher.match(pattern.geometry);
                     if (edges == null || edges.isEmpty()) {
                         log.warn("Could not match to street network: {}", pattern);
@@ -85,6 +84,7 @@ public class MapBuilder implements GraphBuilder {
                     }
                     Coordinate[] coordinateArray = new Coordinate[coordinates.size()];
                     LineString ls = GeometryUtils.getGeometryFactory().createLineString(coordinates.toArray(coordinateArray));
+                    // Replace the pattern's geometry from GTFS with that of the equivalent OSM edges.
                     pattern.geometry = ls;
                 }
             }

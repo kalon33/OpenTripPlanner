@@ -7,15 +7,17 @@ import org.glassfish.hk2.utilities.binding.AbstractBinder;
 import org.opentripplanner.analyst.DiskBackedPointSetCache;
 import org.opentripplanner.analyst.PointSetCache;
 import org.opentripplanner.analyst.SurfaceCache;
-import org.opentripplanner.routing.core.RoutingRequest;
 import org.opentripplanner.routing.error.GraphNotFoundException;
+import org.opentripplanner.routing.impl.GraphScanner;
+import org.opentripplanner.routing.impl.InputStreamGraphSource;
 import org.opentripplanner.routing.services.GraphService;
 import org.opentripplanner.scripting.impl.ScriptingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * This is replacing a Spring application context.
+ * This is essentially replacing a Spring application context.
+ * It just bundles together references to all the OTP components so we can pass them around the system.
  */
 public class OTPServer {
 
@@ -23,14 +25,6 @@ public class OTPServer {
 
     // Core OTP modules
     private GraphService graphService;
-
-    /**
-     * The prototype routing request which establishes default parameter values. Note: this need to
-     * be server-wide as we build the request before knowing which router it will be resolved to.
-     * This prevent from having default request values per router instance. Fix this if this is
-     * needed.
-     */
-    public RoutingRequest routingRequest;
 
     /** The directory under which graphs, caches, etc. will be stored. */
     public File basePath = null;
@@ -48,8 +42,7 @@ public class OTPServer {
         this.params = params;
 
         // Core OTP modules
-        graphService = gs;
-        routingRequest = new RoutingRequest();
+        this.graphService = gs;
 
         // Optional Analyst Modules.
         if (params.analyst) {

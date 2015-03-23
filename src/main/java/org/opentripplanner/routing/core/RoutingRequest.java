@@ -29,7 +29,7 @@ import com.google.common.base.Objects;
 import org.onebusaway.gtfs.model.AgencyAndId;
 import org.onebusaway.gtfs.model.Route;
 import org.onebusaway.gtfs.model.Trip;
-import org.opentripplanner.api.parameter.QualifiedModeSetSequence;
+import org.opentripplanner.api.parameter.QualifiedModeSet;
 import org.opentripplanner.common.MavenVersion;
 import org.opentripplanner.common.model.GenericLocation;
 import org.opentripplanner.common.model.NamedPlace;
@@ -44,12 +44,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * A trip planning request. Some parameters may not be honored by the trip planner for some or all itineraries. For example, maxWalkDistance may be
- * relaxed if the alternative is to not provide a route.
- * 
- * NOTE this is the result of merging what used to be called a REQUEST and a TRAVERSEOPTIONS.
- * The Lombok Getter/Setter annotations serve to create getter and setter methods on all fields,
- * so defaults can be supplied in a PrototypeRoutingRequest bean via Spring.
+ * A trip planning request. Some parameters may not be honored by the trip planner for some or all itineraries.
+ * For example, maxWalkDistance may be relaxed if the alternative is to not provide a route.
+ *
+ * All defaults should be specified here in the RoutingRequest, NOT as annotations on query parameters in web services
+ * that create RoutingRequests. This establishes a priority chain for default values:
+ * RoutingRequest field initializers, then JSON router config, then query parameters.
  */
 public class RoutingRequest implements Cloneable, Serializable {
 
@@ -59,15 +59,12 @@ public class RoutingRequest implements Cloneable, Serializable {
 
     /**
      * The model that computes turn/traversal costs.
-     * 
-     * TODO(flamholz): this is a weird place to inject this model. We do it here because, for historical reasons, this is 
-     * the most reasonable place to inject it.
+     * TODO: move this to the Router or the Graph if it doesn't clutter the code too much
      */
     public IntersectionTraversalCostModel traversalCostModel = new SimpleIntersectionTraversalCostModel();
 
     /* FIELDS UNIQUELY IDENTIFYING AN SPT REQUEST */
 
-    /* TODO no defaults should be set here, they should all be handled in one place (searchresource) */
     /** The complete list of incoming query parameters. */
     public final HashMap<String, String> parameters = new HashMap<String, String>();
 
@@ -99,7 +96,7 @@ public class RoutingRequest implements Cloneable, Serializable {
     public double maxWeight = Double.MAX_VALUE;
 
     /** The set of TraverseModes that a user is willing to use. Defaults to WALK | TRANSIT. */
-    public TraverseModeSet modes = new TraverseModeSet("TRANSIT,WALK"); // defaults in constructor
+    public TraverseModeSet modes = new TraverseModeSet("TRANSIT,WALK"); // defaults in constructor overwrite this
 
     /** The set of characteristics that the user wants to optimize for -- defaults to QUICK, or optimize for transit time. */
     public OptimizeType optimize = OptimizeType.QUICK; // TODO this should be completely removed and done only with individual cost parameters
@@ -113,7 +110,7 @@ public class RoutingRequest implements Cloneable, Serializable {
     /** Whether the trip must be wheelchair accessible. */
     public boolean wheelchairAccessible = false;
 
-    /** The maximum number of possible itineraries to return. */
+    /** The maximum number of itineraries to return. */
     public int numItineraries = 3;
 
     /** The maximum slope of streets for wheelchair trips. */
@@ -323,7 +320,7 @@ public class RoutingRequest implements Cloneable, Serializable {
     /**
      * The maximum wait time in seconds the user is willing to delay trip start. Only effective in Analyst.
      */
-    public long clampInitialWait;
+    public long clampInitialWait = -1;
 
     /**
      * When true, reverse optimize this search on the fly whenever needed, rather than reverse-optimizing the entire path when it's done.
@@ -431,14 +428,14 @@ public class RoutingRequest implements Cloneable, Serializable {
         this.setModes(modes);
     }
 
-    public RoutingRequest(QualifiedModeSetSequence qmodes) {
+    public RoutingRequest(QualifiedModeSet qmodes) {
         this();
-        qmodes.applyToRequest(this);
+        qmodes.applyToRoutingRequest(this);
     }
 
     public RoutingRequest(String qmodes) {
         this();
-        new QualifiedModeSetSequence(qmodes).applyToRequest(this);
+        new QualifiedModeSet(qmodes).applyToRoutingRequest(this);
     }
 
     public RoutingRequest(TraverseMode mode) {
@@ -496,7 +493,7 @@ public class RoutingRequest implements Cloneable, Serializable {
             bikeWalkingOptions.bikeSwitchTime = bikeSwitchTime;
             bikeWalkingOptions.bikeSwitchCost = bikeSwitchCost;
             bikeWalkingOptions.stairsReluctance = stairsReluctance * 5; // carrying bikes on stairs is awful
-        } else if (modes.getDriving()) {
+        } else if (modes.getCar()) {
             bikeWalkingOptions = new RoutingRequest();
             bikeWalkingOptions.setArriveBy(this.arriveBy);
             bikeWalkingOptions.maxWalkDistance = maxWalkDistance;
@@ -693,10 +690,6 @@ public class RoutingRequest implements Cloneable, Serializable {
         this.numItineraries = numItineraries;
     }
 
-    public String toHtmlString() {
-        return toString("<br/>");
-    }
-
     public String toString() {
         return toString(" ");
     }
@@ -758,13 +751,6 @@ public class RoutingRequest implements Cloneable, Serializable {
     public void setTriangleTimeFactor(double triangleTimeFactor) {
         this.triangleTimeFactor = triangleTimeFactor;
         bikeWalkingOptions.triangleTimeFactor = triangleTimeFactor;
-    }
-
-    public void setMaxTransfers(int maxTransfers) {
-        // if (maxTransfers > CLAMP_TRANSFERS) {
-        // maxTransfers = CLAMP_TRANSFERS;
-        // }
-        this.maxTransfers = maxTransfers;
     }
 
     public NamedPlace getFromPlace() {
@@ -995,8 +981,6 @@ public class RoutingRequest implements Cloneable, Serializable {
             return bikeSpeed;
         case CAR:
             return carSpeed;
-        case CUSTOM_MOTOR_VEHICLE:
-            return carSpeed;
         default:
             break;
         }
@@ -1006,7 +990,7 @@ public class RoutingRequest implements Cloneable, Serializable {
     /** @return The highest speed for all possible road-modes. */
     public double getStreetSpeedUpperBound() {
         // Assume carSpeed > bikeSpeed > walkSpeed
-        if (modes.getDriving())
+        if (modes.getCar())
             return carSpeed;
         if (modes.getBicycle())
             return bikeSpeed;
@@ -1043,38 +1027,6 @@ public class RoutingRequest implements Cloneable, Serializable {
             builder.setLength(builder.length() - 1);
         }
         return builder.toString();
-    }
-
-    public String getPreferredRouteStr() {
-        return preferredRoutes.asString();
-    }
-    
-    public String getPreferredAgenciesStr() {
-        return getRouteOrAgencyStr(preferredAgencies);
-    }
-
-    public String getUnpreferredRouteStr() {
-        return unpreferredRoutes.asString();
-    }
-    
-    public String getUnpreferredAgenciesStr() {
-        return getRouteOrAgencyStr(unpreferredAgencies);
-    }
-
-    public String getBannedRouteStr() {
-        return bannedRoutes.asString();
-    }
-
-    public String getBannedStopsStr() {
-        return bannedStops.asString();
-    }
-    
-    public String getBannedStopsHardStr() {
-        return bannedStopsHard.asString();
-    }
-    
-    public String getBannedAgenciesStr() {
-        return getRouteOrAgencyStr(bannedAgencies);
     }
 
     public void setMaxWalkDistance(double maxWalkDistance) {

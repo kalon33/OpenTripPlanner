@@ -99,8 +99,8 @@ otp.config = {
      * properties, when set, override that behavioir.
      */
      
-    initLatLng : new L.LatLng(44.837912, -0.579541),
-    initZoom : 11,
+    initLatLng : new L.LatLng(48.8588589, 2.3475569),
+    initZoom : 10,
     // minZoom : 10,
     // maxZoom : 20,
     
@@ -111,10 +111,10 @@ otp.config = {
      * Site name / description / branding display options
      */
 
-    siteName            : "Planificateur de trajets sur l'Aquitaine",
+    siteName            : "Planificateur de trajets sur l'Île de France",
     siteDescription     : "Une instance d'OpenTripPlanner",
     logoGraphic         : 'images/otp_logo_darkbg_40px.png',
-    bikeshareName    : "VCub",
+    bikeshareName    : "JCDecaux",
     //Enable this if you want to show frontend language chooser
     showLanguageChooser : true,
 

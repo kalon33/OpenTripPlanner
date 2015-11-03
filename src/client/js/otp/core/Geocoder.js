@@ -36,18 +36,12 @@ otp.core.Geocoder = otp.Class({
             
             success: function(data, status, xhr) {
               if (xhr === lastXhr){
-                if((typeof data) == "string") data = jQuery.parseXML(data);
+                if((typeof data) == "string") data = jQuery.parseJSON(data);
                 var results = [];
-                $(data).find("geocoderResults").find("results").find("result").each(function () {
-                    var resultXml = $(this);
+                $.each(data.results, function () {
+                    var resultJSON = $(this)[0];
                     
-                    var resultObj = {
-                        description : resultXml.find("description").text(),
-                        lat : resultXml.find("lat").text(),
-                        lng : resultXml.find("lng").text()
-                    };
-    
-                    results.push(resultObj);                    
+                   results.push(resultJSON);                    
                 });
                 
                 setResultsCallback.call(this, results);

@@ -166,11 +166,17 @@ otp.config = {
      *       the user-specifed address string
      */
 
-    geocoders : [
+  geocoders : [
         {
-            name: 'OTP built-in geocoder',
-            className: 'otp.core.GeocoderBuiltin'
+            //name: 'OTP built-in geocoder',
+            //className: 'otp.core.GeocoderBuiltin'
             // URL and query parameter do not need to be set for built-in geocoder.
+            //    --------------------------
+                   name: 'Nominatim Geocoder',
+                   className: 'otp.core.Geocoder',
+                   url: 'otp/geocode', 
+                   addressParam: 'address'
+            	
         }
     ],
 

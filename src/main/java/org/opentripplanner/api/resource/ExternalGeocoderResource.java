@@ -49,10 +49,10 @@ public class ExternalGeocoderResource {
         
         if (geocoder==null) {
         	org.opentripplanner.geocoder.nominatim.NominatimGeocoder newGeocoder = new org.opentripplanner.geocoder.nominatim.NominatimGeocoder();
-        	newGeocoder.setEmailAddress("yourEmail@address.here");  <--- Put your email address here
-        	newGeocoder.setNominatimUrl("http://open.mapquestapi.com/nominatim/v1/search.php?key=xxxxxxxxxxxxxxx");  <--- Insert your Mapquest developer key here or use local Nominatim instance
+        	newGeocoder.setEmailAddress("yourEmail@address.here");
+        	newGeocoder.setNominatimUrl("http://open.mapquestapi.com/nominatim/v1/search.php?key=xxxxxxxxxxxxxxx");
         	newGeocoder.setResultLimit(30);
-        	newGeocoder.setViewBox("0.69,48.06,3.98,49.59");  <----- Set your desired search box here
+        	newGeocoder.setViewBox("0.69,48.06,3.98,49.59");
         	geocoder = newGeocoder;
         }
         

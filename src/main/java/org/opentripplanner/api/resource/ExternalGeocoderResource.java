@@ -49,8 +49,8 @@ public class ExternalGeocoderResource {
         
         if (geocoder==null) {
         	org.opentripplanner.geocoder.nominatim.NominatimGeocoder newGeocoder = new org.opentripplanner.geocoder.nominatim.NominatimGeocoder();
-        	newGeocoder.setEmailAddress("kalonbuntu33@gmail.com");
-        	newGeocoder.setNominatimUrl("http://open.mapquestapi.com/nominatim/v1/search.php?key=GdX4rYUlZUsqvGQgaIMbuw2N248qyImp");
+        	newGeocoder.setEmailAddress("yourEmail@address.here");
+        	newGeocoder.setNominatimUrl("http://open.mapquestapi.com/nominatim/v1/search.php?key=xxxxxxxxxxxxxxx");
         	newGeocoder.setResultLimit(30);
         	newGeocoder.setViewBox("0.69,48.06,3.98,49.59");
         	geocoder = newGeocoder;

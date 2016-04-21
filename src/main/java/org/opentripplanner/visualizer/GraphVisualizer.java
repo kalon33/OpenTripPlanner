@@ -13,92 +13,43 @@
 
 package org.opentripplanner.visualizer;
 
-import java.awt.BorderLayout;
-import java.awt.Color;
-import java.awt.Component;
-import java.awt.Container;
-import java.awt.Dimension;
-import java.awt.GridLayout;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.event.ItemEvent;
-import java.awt.event.ItemListener;
-import java.awt.event.MouseEvent;
-import java.awt.event.MouseListener;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
-import java.lang.reflect.Field;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Queue;
-import java.util.Set;
-
+import com.google.common.collect.Sets;
+import com.vividsolutions.jts.geom.Coordinate;
 import javassist.Modifier;
-
-import javax.swing.AbstractListModel;
-import javax.swing.BoxLayout;
-import javax.swing.ButtonGroup;
-import javax.swing.DefaultListCellRenderer;
-import javax.swing.DefaultListModel;
-import javax.swing.JButton;
-import javax.swing.JCheckBox;
-import javax.swing.JComponent;
-import javax.swing.JFrame;
-import javax.swing.JLabel;
-import javax.swing.JList;
-import javax.swing.JMenuItem;
-import javax.swing.JOptionPane;
-import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
-import javax.swing.JRadioButton;
-import javax.swing.JScrollPane;
-import javax.swing.JTabbedPane;
-import javax.swing.JTextField;
-import javax.swing.ListCellRenderer;
-import javax.swing.ListModel;
-import javax.swing.ScrollPaneConstants;
-import javax.swing.SwingUtilities;
-import javax.swing.event.ChangeEvent;
-import javax.swing.event.ChangeListener;
-import javax.swing.event.ListSelectionEvent;
-import javax.swing.event.ListSelectionListener;
-
 import org.opentripplanner.common.model.GenericLocation;
 import org.opentripplanner.graph_builder.annotation.GraphBuilderAnnotation;
 import org.opentripplanner.graph_builder.annotation.StopUnlinked;
-import org.opentripplanner.routing.algorithm.GenericAStar;
+import org.opentripplanner.routing.algorithm.TraverseVisitor;
 import org.opentripplanner.routing.core.OptimizeType;
 import org.opentripplanner.routing.core.RoutingRequest;
 import org.opentripplanner.routing.core.State;
 import org.opentripplanner.routing.core.TraverseModeSet;
 import org.opentripplanner.routing.edgetype.StreetEdge;
-import org.opentripplanner.routing.edgetype.StreetEdge;
 import org.opentripplanner.routing.graph.Edge;
 import org.opentripplanner.routing.graph.Graph;
 import org.opentripplanner.routing.graph.Vertex;
-import org.opentripplanner.routing.impl.GenericAStarFactory;
-import org.opentripplanner.routing.impl.LongDistancePathService;
-import org.opentripplanner.routing.impl.ParetoPathService;
-import org.opentripplanner.routing.impl.SPTVisitor;
-import org.opentripplanner.routing.services.GraphService;
-import org.opentripplanner.routing.services.PathService;
+import org.opentripplanner.routing.impl.GraphPathFinder;
+import org.opentripplanner.routing.spt.DominanceFunction;
 import org.opentripplanner.routing.spt.GraphPath;
-import org.opentripplanner.routing.spt.MultiShortestPathTree;
 import org.opentripplanner.routing.spt.ShortestPathTree;
 import org.opentripplanner.routing.vertextype.IntersectionVertex;
+import org.opentripplanner.standalone.Router;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.Sets;
-import com.vividsolutions.jts.geom.Coordinate;
+import javax.swing.*;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
+import java.awt.*;
+import java.awt.event.*;
+import java.lang.reflect.Field;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.*;
+import java.util.List;
+import java.util.Queue;
 
 /**
  * Exit on window close.
@@ -335,7 +286,11 @@ public class GraphVisualizer extends JFrame implements VertexSelectionListener {
 
     private JPanel leftPanel;
 
+    /* The Processing applet that actually displays the graph. */
     private ShowGraph showGraph;
+
+    /* The set of callbacks that display search progress on the showGraph Processing applet. */
+    public TraverseVisitor traverseVisitor;
 
     public JList<DisplayVertex> nearbyVertices;
 
@@ -361,8 +316,6 @@ public class GraphVisualizer extends JFrame implements VertexSelectionListener {
 
     private JCheckBox carCheckBox;
 
-    private JCheckBox cmvCheckBox;
-
     private JTextField searchDate;
 
     private SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss z");
@@ -373,10 +326,6 @@ public class GraphVisualizer extends JFrame implements VertexSelectionListener {
 
     private JList<GraphBuilderAnnotation> annotationMatches;
     
-    private PathService pathservice;
-        
-    private GenericAStarFactory sptServiceFactory = new GenericAStarFactory();
-
     private DefaultListModel<String> metadataModel;
 
     private HashSet<Vertex> closed;
@@ -388,7 +337,11 @@ public class GraphVisualizer extends JFrame implements VertexSelectionListener {
     private HashSet<Vertex> seen;
 
     private JList<String> metadataList;
-    
+
+    /* The router we are visualizing. */
+    private final Router router;
+
+    /* The graph from the router we are visualizing, note that it will not be updated if the router reloads. */
     private final Graph graph;
 
 	private JRadioButton opQuick;
@@ -459,17 +412,12 @@ public class GraphVisualizer extends JFrame implements VertexSelectionListener {
 
 	private JCheckBox longDistanceModeCheckbox;
 
-	private GraphService graphService;
-
-    public GraphVisualizer(GraphService graphService) {
+    public GraphVisualizer(Router router) {
         super();
         LOG.info("Starting up graph visualizer...");
-        
-        this.graphService = graphService;
-        this.graph = graphService.getGraph();
-        this.pathservice = new ParetoPathService(graphService, sptServiceFactory);
         setTitle("GraphVisualizer");
-        
+        this.router = router;
+        this.graph = router.graph;
         init();
     }
 
@@ -554,11 +502,11 @@ public class GraphVisualizer extends JFrame implements VertexSelectionListener {
         dominateButton.addActionListener(new ActionListener(){
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				State s1 = firstComparePathStates.getSelectedValue();
+                State s1 = firstComparePathStates.getSelectedValue();
 				State s2 = secondComparePathStates.getSelectedValue();
-				
-				System.out.println("s1 dominates s2:"+MultiShortestPathTree.dominates(s1,s2));
-				System.out.println("s2 dominates s1:"+MultiShortestPathTree.dominates(s2,s1));
+                DominanceFunction pareto = new DominanceFunction.Pareto();
+				System.out.println("s1 dominates s2:" + pareto.betterOrEqualAndComparable(s1, s2));
+				System.out.println("s2 dominates s1:" + pareto.betterOrEqualAndComparable(s2, s1));
 			}
         });
         pane.add(dominateButton);
@@ -592,7 +540,7 @@ public class GraphVisualizer extends JFrame implements VertexSelectionListener {
         // init center graphical panel
         showGraph = new ShowGraph(this, getGraph());
         pane.add(showGraph, BorderLayout.CENTER);
-        sptServiceFactory.setTraverseVisitor(new VisualTraverseVisitor(showGraph));
+        traverseVisitor = new VisualTraverseVisitor(showGraph);
 
         // init left panel
         leftPanel = new JPanel();
@@ -609,11 +557,11 @@ public class GraphVisualizer extends JFrame implements VertexSelectionListener {
 		return pane;
 	}
 	
-	private JComponent makePrefsPanel(){
+    private JComponent makePrefsPanel() {
         JPanel pane = new JPanel();
         pane.setLayout(new GridLayout(0, 2));
-        
-        // 2 rows: transport mode options
+
+        // 4 rows (7 elements): transport mode options
         walkCheckBox = new JCheckBox("walk");
         walkCheckBox.setSelected(true);
         pane.add(walkCheckBox);
@@ -630,9 +578,11 @@ public class GraphVisualizer extends JFrame implements VertexSelectionListener {
         pane.add(transitCheckBox);
         carCheckBox = new JCheckBox("car");
         pane.add(carCheckBox);
-        cmvCheckBox = new JCheckBox("custom vehicle");
-        pane.add(cmvCheckBox);
-        
+
+        // GridLayout does not support empty cells, so a dummy label is used to fix the layout.
+        JLabel dummyLabel = new JLabel("");
+        pane.add(dummyLabel);
+
         // row: arrive by?
         JLabel arriveByLabel = new JLabel("Arrive by?:");
         pane.add(arriveByLabel);
@@ -644,149 +594,131 @@ public class GraphVisualizer extends JFrame implements VertexSelectionListener {
         pane.add(boardPenaltyLabel);
         boardingPenaltyField = new JTextField("5");
         pane.add(boardingPenaltyField);
-        
+
         // row: max walk
         JLabel maxWalkLabel = new JLabel("Maximum walk (meters):");
         pane.add(maxWalkLabel);
         maxWalkField = new JTextField("5000");
         pane.add(maxWalkField);
-        
+
         // row: walk speed
         JLabel walkSpeedLabel = new JLabel("Walk speed (m/s):");
         pane.add(walkSpeedLabel);
         walkSpeed = new JTextField("1.33");
         pane.add(walkSpeed);
-        
+
         // row: bike speed
         JLabel bikeSpeedLabel = new JLabel("Bike speed (m/s):");
         pane.add(bikeSpeedLabel);
         bikeSpeed = new JTextField("5.0");
         pane.add(bikeSpeed);
-        
+
         // row: heuristic weight
         JLabel heuristicWeightLabel = new JLabel("Heuristic weight:");
         pane.add(heuristicWeightLabel);
         heuristicWeight = new JTextField("1.0");
         pane.add(heuristicWeight);
-        
+
         // row: soft walk?
         JLabel softWalkLimitLabel = new JLabel("Soft walk-limit?:");
         pane.add(softWalkLimitLabel);
         softWalkLimiting = new JCheckBox("soft walk-limiting");
         pane.add(softWalkLimiting);
-        
+
         // row: soft walk-limit penalty
         JLabel softWalkLimitPenaltyLabel = new JLabel("Soft walk-limiting penalty:");
         pane.add(softWalkLimitPenaltyLabel);
         softWalkPenalty = new JTextField("60.0");
         pane.add(softWalkPenalty);
-        
+
         // row: soft walk-limit overage
         JLabel softWalkLimitOverageLabel = new JLabel("Soft walk-limiting overage:");
         pane.add(softWalkLimitOverageLabel);
         softWalkOverageRate = new JTextField("5.0");
         pane.add(softWalkOverageRate);
-        
+
         // row: nPaths
         JLabel nPathsLabel = new JLabel("nPaths:");
         pane.add(nPathsLabel);
         nPaths = new JTextField("1");
         pane.add(nPaths);
-        
-        //viz preferences
-        ItemListener onChangeVizPrefs = new ItemListener(){
-        	@Override
-        	public void itemStateChanged(ItemEvent e) {
-        		showGraph.setShowTransit( showTransitCheckbox.isSelected() );
-        		showGraph.setShowStreets( showStreetsCheckbox.isSelected() );
-        		showGraph.setShowMultistateVertices( showMultistateVerticesCheckbox.isSelected() );
-        		showGraph.setShowHightlights( showHighlightedCheckbox.isSelected() );
-        		showGraph.setShowSPT( showSPTCheckbox.isSelected() );
-        		showGraph.redraw();
-        	}
+
+        // viz preferences
+        ItemListener onChangeVizPrefs = new ItemListener() {
+            @Override
+            public void itemStateChanged(ItemEvent e) {
+                showGraph.setShowTransit(showTransitCheckbox.isSelected());
+                showGraph.setShowStreets(showStreetsCheckbox.isSelected());
+                showGraph.setShowMultistateVertices(showMultistateVerticesCheckbox.isSelected());
+                showGraph.setShowHightlights(showHighlightedCheckbox.isSelected());
+                showGraph.setShowSPT(showSPTCheckbox.isSelected());
+                showGraph.redraw();
+            }
         };
         showTransitCheckbox = new JCheckBox("show transit");
         showTransitCheckbox.setSelected(true);
-        showTransitCheckbox.addItemListener( onChangeVizPrefs );
+        showTransitCheckbox.addItemListener(onChangeVizPrefs);
         pane.add(showTransitCheckbox);
         showStreetsCheckbox = new JCheckBox("show streets");
-    	showStreetsCheckbox.setSelected(true);
-    	showStreetsCheckbox.addItemListener( onChangeVizPrefs );
-    	pane.add(showStreetsCheckbox);
-    	showHighlightedCheckbox = new JCheckBox("show highlighted");
-    	showHighlightedCheckbox.setSelected(true);
-    	showHighlightedCheckbox.addItemListener( onChangeVizPrefs );
-    	pane.add(showHighlightedCheckbox);     
-    	showSPTCheckbox = new JCheckBox("show SPT");
-    	showSPTCheckbox.setSelected(true);
-    	showSPTCheckbox.addItemListener( onChangeVizPrefs );
-    	pane.add(showSPTCheckbox);
-    	showMultistateVerticesCheckbox = new JCheckBox("show multistate vertices");
-    	showMultistateVerticesCheckbox.setSelected(true);
-    	showMultistateVerticesCheckbox.addItemListener( onChangeVizPrefs );
-    	pane.add(showMultistateVerticesCheckbox);
-    	
-    	// row: SPT flattening
-    	JLabel sptFlatteningLabel = new JLabel("SPT flattening:");
-    	pane.add(sptFlatteningLabel);
-    	sptFlattening = new JTextField("0.3");
-    	pane.add(sptFlattening);
+        showStreetsCheckbox.setSelected(true);
+        showStreetsCheckbox.addItemListener(onChangeVizPrefs);
+        pane.add(showStreetsCheckbox);
+        showHighlightedCheckbox = new JCheckBox("show highlighted");
+        showHighlightedCheckbox.setSelected(true);
+        showHighlightedCheckbox.addItemListener(onChangeVizPrefs);
+        pane.add(showHighlightedCheckbox);
+        showSPTCheckbox = new JCheckBox("show SPT");
+        showSPTCheckbox.setSelected(true);
+        showSPTCheckbox.addItemListener(onChangeVizPrefs);
+        pane.add(showSPTCheckbox);
+        showMultistateVerticesCheckbox = new JCheckBox("show multistate vertices");
+        showMultistateVerticesCheckbox.setSelected(true);
+        showMultistateVerticesCheckbox.addItemListener(onChangeVizPrefs);
+        pane.add(showMultistateVerticesCheckbox);
 
-    	// row: SPT thickness
-    	JLabel sptThicknessLabel = new JLabel("SPT thickness:");
-    	pane.add(sptThicknessLabel);
-    	sptThickness = new JTextField("0.1");
-    	pane.add(sptThickness);
-        
+        // GridLayout does not support empty cells, so a dummy label is used to fix the layout.
+        JLabel dummyLabel2 = new JLabel("");
+        pane.add(dummyLabel2);
+
+        // row: SPT flattening
+        JLabel sptFlatteningLabel = new JLabel("SPT flattening:");
+        pane.add(sptFlatteningLabel);
+        sptFlattening = new JTextField("0.3");
+        pane.add(sptFlattening);
+
+        // row: SPT thickness
+        JLabel sptThicknessLabel = new JLabel("SPT thickness:");
+        pane.add(sptThicknessLabel);
+        sptThickness = new JTextField("0.1");
+        pane.add(sptThickness);
+
         // radio buttons: optimize type
         JLabel optimizeTypeLabel = new JLabel("Optimize type:");
         pane.add(optimizeTypeLabel);
-    	
+
         opQuick = new JRadioButton("Quick");
         opQuick.setSelected(true);
         opSafe = new JRadioButton("Safe");
         opFlat = new JRadioButton("Flat");
-        opGreenways = new  JRadioButton("Greenways");
-        
+        opGreenways = new JRadioButton("Greenways");
+
         optimizeTypeGrp = new ButtonGroup();
         optimizeTypeGrp.add(opQuick);
         optimizeTypeGrp.add(opSafe);
         optimizeTypeGrp.add(opFlat);
         optimizeTypeGrp.add(opGreenways);
-        
+
         JPanel optimizeTypePane = new JPanel();
         optimizeTypePane.add(opQuick);
         optimizeTypePane.add(opSafe);
         optimizeTypePane.add(opFlat);
         optimizeTypePane.add(opGreenways);
-        
-        pane.add(optimizeTypePane);
-        
-        // long distance mode
-        ItemListener onChangeLongDistanceMode = new ItemListener(){
-        	@Override
-        	public void itemStateChanged(ItemEvent e) {
-        		JCheckBox item = (JCheckBox) e.getItem();
-        		setLongDistanceMode( item.isSelected() );
-        	}
-        };
-        longDistanceModeCheckbox = new JCheckBox("long distance mode");
-        longDistanceModeCheckbox.setSelected(false);
-        longDistanceModeCheckbox.addItemListener( onChangeLongDistanceMode );
-        pane.add(longDistanceModeCheckbox);
-        
-		return pane;
-	}
-	
-	protected void setLongDistanceMode(boolean selected) {
-		if( selected ){
-			this.pathservice = new LongDistancePathService(graphService, sptServiceFactory);
-		} else {
-			this.pathservice = new ParetoPathService(graphService, sptServiceFactory);
-		}
-		
-	}
 
+        pane.add(optimizeTypePane);
+
+        return pane;
+    }
+	
 	OptimizeType getSelectedOptimizeType(){
 		if(opQuick.isSelected()){
 			return OptimizeType.QUICK;
@@ -1039,10 +971,8 @@ public class GraphVisualizer extends JFrame implements VertexSelectionListener {
                 String locString = (String) JOptionPane.showInputDialog(frame, "Location string",
                         "");
                 GenericLocation loc = GenericLocation.fromOldStyleString(locString);
-                RoutingRequest rr = new RoutingRequest();
-                Vertex v = graph.streetIndex.getVertexForLocation(
-                        loc, rr);
-                showGraph.highlightVertex(v);
+                Coordinate c = graph.streetIndex.getClosestPointOnStreet(loc.getCoordinate());
+                if (c != null) showGraph.highlightCoordinate(c);
             }
         });
         buttonPanel.add(snapButton);
@@ -1068,9 +998,9 @@ public class GraphVisualizer extends JFrame implements VertexSelectionListener {
 	                try {
 	                    value = "" + field.get(selected);
 	                } catch (IllegalArgumentException e1) {
-	                    e1.printStackTrace();
+						LOG.error("IllegalArgumentException", e1);
 	                } catch (IllegalAccessException e1) {
-	                    e1.printStackTrace();
+	                    LOG.error("IllegalAccessException", e1);
 	                }
 	                metadataModel.addElement(name + ": " + value);
 	            }
@@ -1447,7 +1377,6 @@ public class GraphVisualizer extends JFrame implements VertexSelectionListener {
         modeSet.setTrainish(trainCheckBox.isSelected());
         modeSet.setBusish(busCheckBox.isSelected());
         modeSet.setCar(carCheckBox.isSelected());
-        modeSet.setCustomMotorVehicle(cmvCheckBox.isSelected());
         // must set generic transit mode last, and only when it is checked
         // otherwise 'false' will clear trainish and busish
         if (transitCheckBox.isSelected())
@@ -1465,7 +1394,6 @@ public class GraphVisualizer extends JFrame implements VertexSelectionListener {
         options.setToString(to);
         options.walkSpeed = Float.parseFloat(walkSpeed.getText());
         options.bikeSpeed = Float.parseFloat(bikeSpeed.getText());
-        options.heuristicWeight = (Float.parseFloat(heuristicWeight.getText()));
         options.softWalkLimiting = ( softWalkLimiting.isSelected() );
         options.softWalkPenalty = (Float.parseFloat(softWalkPenalty.getText()));
         options.softWalkOverageRate = (Float.parseFloat(this.softWalkOverageRate.getText()));
@@ -1478,27 +1406,26 @@ public class GraphVisualizer extends JFrame implements VertexSelectionListener {
         options.numItineraries = ( Integer.parseInt( this.nPaths.getText() ) );
         
         // apply callback if the options call for it
-        if( dontUseGraphicalCallbackCheckBox.isSelected() ){
-        	sptServiceFactory.setTraverseVisitor(null);
-        } else {
-        	sptServiceFactory.setTraverseVisitor(new VisualTraverseVisitor(showGraph));
-        }
-        
-        // set up a visitor to the path service so we can get the SPT as it's generated
-        SPTVisitor vis = new SPTVisitor();
-        pathservice.setSPTVisitor(vis);
-        
+        // if( dontUseGraphicalCallbackCheckBox.isSelected() ){
+        // TODO perhaps avoid using a GraphPathFinder and go one level down the call chain directly to a GenericAStar
+        // TODO perhaps instead of giving the pathservice a callback, we can just put the visitor in the routing request
+        GraphPathFinder finder = new GraphPathFinder(router);
+
         long t0 = System.currentTimeMillis();
         // TODO: check options properly intialized (AMB)
-        List<GraphPath> paths = pathservice.getPaths(options);
+        List<GraphPath> paths = finder.graphPathFinderEntryPoint(options);
         long dt = System.currentTimeMillis() - t0;
         searchTimeElapsedLabel.setText( "search time elapsed: "+dt+"ms" );
         
         // grab the spt from the visitor
+        // TODO somehow yank the SPT out of the depths of the call stack... but there multiple SPTs here.
+        // This is why we should probably just use AStar directly.
+        /*
         spt = vis.spt;
         showGraph.setSPT(spt);
         System.out.println( "got spt:"+spt );
-        
+        */
+
         if (paths == null) {
             System.out.println("no path");
             showGraph.highlightGraphPath(null);

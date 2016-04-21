@@ -19,6 +19,7 @@ otp.config = {
     locales : {
         'en': otp.locale.English,
         'de': otp.locale.German,
+        'pl': otp.locale.Polish,
         'sl': otp.locale.Slovenian,
         'fr': otp.locale.French,
         'it': otp.locale.Italian,
@@ -65,8 +66,14 @@ otp.config = {
      *       applicable
      *       
      */
-     
+
     baseLayers: [
+        {
+            name: 'Transport Tiles',
+            tileUrl: 'http://{s}.tile.thunderforest.com/transport/{z}/{x}/{y}.png',
+            subdomains : ['a','b','c'],
+            attribution: 'Data from <a href="http://www.openstreetmap.org/" target="_blank">OpenStreetMap</a> and contributors. Tiles from <a href="http://www.thunderforest.com/transport/">Andy Allan</a>'
+        },
         {
             name: 'MapQuest OSM',
             tileUrl: 'http://{s}.mqcdn.com/tiles/1.0.0/osm/{z}/{x}/{y}.png',
@@ -78,32 +85,37 @@ otp.config = {
             tileUrl: 'http://{s}.mqcdn.com/tiles/1.0.0/sat/{z}/{x}/{y}.png',
             subdomains : ['otile1','otile2','otile3','otile4'],
             attribution : 'Data, imagery and map information provided by <a href="http://open.mapquest.com" target="_blank">MapQuest</a>, <a href="http://www.openstreetmap.org/" target="_blank">OpenStreetMap</a> and contributors.'
-        },           
+        },
+        {
+            name: 'Conveyal Tiles',
+            tileUrl: 'http://a.tiles.mapbox.com/v3/conveyal.hml987j0/{z}/{x}/{y}.png',
+            attribution: 'Data from <a href="http://www.openstreetmap.org/" target="_blank">OpenStreetMap</a> and contributors. Tiles from MapBox.</a>'
+        }
     ],
     
 
     /**
      * Map start location and zoom settings: by default, the client uses the
-     * OTP metadata API call to center and zoom the map. The following
+     * OTP routerInfo API call to center and zoom the map. The following
      * properties, when set, override that behavioir.
      */
      
-    initLatLng : new L.LatLng(44.837912, -0.579541),
-    initZoom : 11,
+    // initLatLng : new L.LatLng(<lat>, <lng>),
+    // initZoom : 14,
     // minZoom : 10,
     // maxZoom : 20,
     
     /* Whether the map should be moved to contain the full itinerary when a result is received. */
-    zoomToFitResults    : true,
+    zoomToFitResults    : false,
 
     /**
      * Site name / description / branding display options
      */
 
-    siteName            : "Planificateur de trajets sur l'Aquitaine",
-    siteDescription     : "Une instance d'OpenTripPlanner.",
+    siteName            : "My OTP Instance",
+    siteDescription     : "An OpenTripPlanner deployment.",
     logoGraphic         : 'images/otp_logo_darkbg_40px.png',
-    bikeshareName    : "VCub",
+    // bikeshareName    : "",
     //Enable this if you want to show frontend language chooser
     showLanguageChooser : true,
 
@@ -132,13 +144,9 @@ otp.config = {
             defaultBaseLayer : 'MapQuest OSM',
             isDefault: true
         },
-	{
-	    id : 'bikeshare',
-	    className : 'otp.modules.bikeshare.BikeShareModule',
-//	},
-//        {
-//            id : 'analyst',
-//            className : 'otp.modules.analyst.AnalystModule'
+        {
+            id : 'analyst',
+            className : 'otp.modules.analyst.AnalystModule'
         }
     ],
     
@@ -190,16 +198,16 @@ otp.config = {
 };
 var options = {
 	resGetPath: 'js/otp/locale/__lng__.json',
-	fallbackLng: 'fr',
+	fallbackLng: 'en',
         nsseparator: ';;', //Fixes problem when : is in translation text
         keyseparator: '_|_',
-	preload: ['fr'],
+	preload: ['en'],
         //TODO: Language choosing works only with this disabled
         /*lng: otp.config.locale_short,*/
         /*postProcess: 'add_nekaj', //Adds | around every string that is translated*/
         /*shortcutFunction: 'sprintf',*/
         /*postProcess: 'sprintf',*/
-	debug: false,
+	debug: true,
 	getAsync: false, //TODO: make async
 	fallbackOnEmpty: true,
 };
@@ -284,6 +292,9 @@ otp.config.modes = {
         "TRAINISH,WALK"       : _tr("Rail Only"), 
     //TRANSLATORS: Travel by: mode of transport (Used in selection in Travel
     //Options widgets)
+        "AIRPLANE,WALK"       : _tr("Airplane Only"),
+    //TRANSLATORS: Travel by: mode of transport (Used in selection in Travel
+    //Options widgets)
         "BICYCLE"             : _tr('Bicycle Only'),
     //TRANSLATORS: Travel by: mode of transport (Used in selection in Travel
     //Options widgets)
@@ -310,10 +321,8 @@ otp.config.modes = {
     // IDEA: maybe we start with a big array (like below), and the pull out modes from this array when turning off various modes...
     //TRANSLATORS: Travel by: mode of transport (Used in selection in Travel
     //Options widgets)
-    "WALK,BICYCLE_RENT"        :_tr('Rented Bicycle'),
+    //    'WALK,BICYCLE_RENT'        :_tr('Rented Bicycle'),
     //TRANSLATORS: Travel by: mode of transport (Used in selection in Travel
     //Options widgets)
-    "TRANSIT,WALK,BICYCLE_RENT": _tr('Transit & Rented Bicycle')
+    //    'TRANSIT,WALK,BICYCLE_RENT': _tr('Transit & Rented Bicycle')
     };
-
-

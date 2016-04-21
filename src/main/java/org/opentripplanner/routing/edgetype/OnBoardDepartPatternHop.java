@@ -30,6 +30,7 @@ import org.opentripplanner.routing.vertextype.PatternStopVertex;
 
 import com.vividsolutions.jts.geom.Coordinate;
 import com.vividsolutions.jts.geom.LineString;
+import java.util.Locale;
 
 /**
  * A transit vehicle's journey (temporary vertex) between departure while onboard a trip and arrival
@@ -37,7 +38,7 @@ import com.vividsolutions.jts.geom.LineString;
  * 
  * @author laurent
  */
-public class OnBoardDepartPatternHop extends Edge implements OnboardEdge {
+public class OnBoardDepartPatternHop extends Edge implements OnboardEdge, TemporaryEdge {
     private static final long serialVersionUID = 1L;
 
     private TripTimes tripTimes;
@@ -79,7 +80,7 @@ public class OnBoardDepartPatternHop extends Edge implements OnboardEdge {
          * Do not multiply by positionInHop, as it is already taken into account by the from vertex
          * location.
          */
-        return SphericalDistanceLibrary.getInstance().distance(getFromVertex().getY(),
+        return SphericalDistanceLibrary.distance(getFromVertex().getY(),
                 getFromVertex().getX(), endStop.getLat(), endStop.getLon());
     }
 
@@ -89,6 +90,11 @@ public class OnBoardDepartPatternHop extends Edge implements OnboardEdge {
 
     public String getName() {
         return GtfsLibrary.getRouteName(trip.getRoute());
+    }
+
+    @Override
+    public String getName(Locale locale) {
+        return this.getName();
     }
 
     public State optimisticTraverse(State state0) {
@@ -161,4 +167,8 @@ public class OnBoardDepartPatternHop extends Edge implements OnboardEdge {
         return tripTimes.getHeadsign(stopIndex);
     }
 
+    @Override
+    public void dispose() {
+        tov.removeIncoming(this);
+    }
 }

@@ -13,13 +13,7 @@
 
 package org.opentripplanner.routing.graph;
 
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.Serializable;
-
-import javax.xml.bind.annotation.XmlTransient;
-
+import com.vividsolutions.jts.geom.LineString;
 import org.onebusaway.gtfs.model.Trip;
 import org.opentripplanner.common.MavenVersion;
 import org.opentripplanner.routing.core.RoutingRequest;
@@ -27,10 +21,16 @@ import org.opentripplanner.routing.core.State;
 import org.opentripplanner.routing.util.IncrementingIdGenerator;
 import org.opentripplanner.routing.util.UniqueIdGenerator;
 
-import com.vividsolutions.jts.geom.LineString;
+import javax.xml.bind.annotation.XmlTransient;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+import java.util.Locale;
 
 /**
- * This is the standard implementation of an edge with fixed from and to Vertex instances; all standard OTP edges are subclasses of this.
+ * This is the standard implementation of an edge with fixed from and to Vertex instances;
+ * all standard OTP edges are subclasses of this.
  */
 public abstract class Edge implements Serializable {
 
@@ -109,40 +109,6 @@ public abstract class Edge implements Serializable {
         return null;
     }
 
-    protected boolean detachFrom(Graph graph) {
-        boolean detached = false;
-        if (fromv != null) {
-            detached = fromv.removeOutgoing(this);
-            fromv = null;
-        }
-        return detached;
-    }
-
-    protected boolean detachTo(Graph graph) {
-        boolean detached = false;
-        if (tov != null) {
-            detached = tov.removeIncoming(this);
-            tov = null;
-        }
-        return detached;
-    }
-
-    /**
-     * Disconnect this edge from its endpoint vertices, keeping edgelists coherent
-     * 
-     * @return
-     */
-    public int detach(Graph graph) {
-        int nDetached = 0;
-        if (detachFrom(graph)) {
-            ++nDetached;
-        }
-        if (detachTo(graph)) {
-            ++nDetached;
-        }
-        return nDetached;
-    }
-
     /**
      * This should only be called inside State; other methods should call
      * org.opentripplanner.routing.core.State.getBackTrip()
@@ -202,8 +168,21 @@ public abstract class Edge implements Serializable {
         return 0;
     }
 
+
+    /**
+     * Gets english localized name
+     * @return english localized name
+     */
     public abstract String getName();
 
+    /**
+     * Gets wanted localization
+     * @param locale wanted locale
+     * @return Localized in specified locale name
+     */
+    public abstract String getName(Locale locale);
+
+    // TODO Add comments about what a "bogus name" is.
     public boolean hasBogusName() {
         return false;
     }

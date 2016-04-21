@@ -94,12 +94,13 @@ public class StateData implements Cloneable {
 
     public Set<String> bikeRentalNetworks;
 
+    /* This boolean is set to true upon transition from a normal street to a no-through-traffic street. */
+    protected boolean enteredNoThroughTrafficArea;
+
     public StateData(RoutingRequest options) {
         TraverseModeSet modes = options.modes;
         if (modes.getCar())
             nonTransitMode = TraverseMode.CAR;
-        else if (modes.getCustomMotorVehicle())
-            nonTransitMode = TraverseMode.CUSTOM_MOTOR_VEHICLE;
         else if (modes.getWalk())
             nonTransitMode = TraverseMode.WALK;
         else if (modes.getBicycle())

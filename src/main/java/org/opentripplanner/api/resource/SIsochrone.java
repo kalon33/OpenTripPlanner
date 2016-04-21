@@ -1,35 +1,16 @@
 package org.opentripplanner.api.resource;
 
-import java.io.StringWriter;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import javax.ws.rs.DefaultValue;
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.Response.Status;
-import javax.xml.bind.annotation.XmlRootElement;
-
+import com.google.common.collect.Maps;
+import com.vividsolutions.jts.geom.*;
+import com.vividsolutions.jts.linearref.LengthIndexedLine;
 import org.geotools.geojson.geom.GeometryJSON;
 import org.geotools.referencing.GeodeticCalculator;
 import org.opensphere.geometry.algorithm.ConcaveHull;
-import org.opentripplanner.analyst.core.GeometryIndex;
 import org.opentripplanner.api.common.RoutingResource;
 import org.opentripplanner.common.geometry.DirectionUtils;
-import org.opentripplanner.common.geometry.DistanceLibrary;
 import org.opentripplanner.common.geometry.ReversibleLineStringWrapper;
 import org.opentripplanner.common.geometry.SphericalDistanceLibrary;
+import org.opentripplanner.routing.algorithm.AStar;
 import org.opentripplanner.routing.core.RoutingRequest;
 import org.opentripplanner.routing.core.State;
 import org.opentripplanner.routing.core.TraverseMode;
@@ -37,21 +18,18 @@ import org.opentripplanner.routing.core.TraverseModeSet;
 import org.opentripplanner.routing.edgetype.StreetEdge;
 import org.opentripplanner.routing.graph.Edge;
 import org.opentripplanner.routing.location.StreetLocation;
-import org.opentripplanner.routing.services.GraphService;
-import org.opentripplanner.routing.services.SPTService;
 import org.opentripplanner.routing.spt.ShortestPathTree;
+import org.opentripplanner.standalone.Router;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.Maps;
-import com.vividsolutions.jts.geom.Coordinate;
-import com.vividsolutions.jts.geom.Geometry;
-import com.vividsolutions.jts.geom.GeometryCollection;
-import com.vividsolutions.jts.geom.GeometryFactory;
-import com.vividsolutions.jts.geom.LineString;
-import com.vividsolutions.jts.geom.MultiLineString;
-import com.vividsolutions.jts.geom.Point;
-import com.vividsolutions.jts.linearref.LengthIndexedLine;
+import javax.ws.rs.*;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.Response.Status;
+import javax.xml.bind.annotation.XmlRootElement;
+import java.io.StringWriter;
+import java.util.*;
 
 /**
  * This is the original Isochrone class provided by Stefan Steineger.
@@ -74,15 +52,6 @@ public class SIsochrone extends RoutingResource {
     private List debugGeoms = null;
 
     private List tooFastTraversedEdgeGeoms = null;
-
-    @Context // FIXME inject Application context
-    GraphService graphService;
-
-    @Context // FIXME inject Application context
-    private SPTService sptService;
-
-    @Context // FIXME inject Application context
-    private GeometryIndex index;
 
     /** Walkspeed between user indicated position and road 3000 m/h = 0.83333 m/sec */
     public double offRoadWalkspeed = 0.8333;
@@ -107,8 +76,6 @@ public class SIsochrone extends RoutingResource {
     public boolean doSpeedTest = false; // to detect u-shaped roads etc., as an additional test besides the angle test
 
     private boolean noRoadNearBy = false;
-
-    private DistanceLibrary distanceLibrary = SphericalDistanceLibrary.getInstance();
 
     /**
      * Calculates walksheds for a given location, based on time given to walk and the walk speed. 
@@ -152,7 +119,7 @@ public class SIsochrone extends RoutingResource {
         this.debugGeoms = new ArrayList();
         this.tooFastTraversedEdgeGeoms = new ArrayList();
 
-        RoutingRequest sptRequestA = buildRequest(0);
+        RoutingRequest sptRequestA = buildRequest();
         String from = sptRequestA.from.toString();
         int pos = 1;
         float lat = 0;
@@ -218,7 +185,7 @@ public class SIsochrone extends RoutingResource {
                 this.maxUserSpeed = sptRequestA.walkSpeed;
             } else if (modes.getBicycle()) {
                 this.maxUserSpeed = sptRequestA.bikeSpeed;
-            } else if (modes.getDriving()) {
+            } else if (modes.getCar()) {
                 this.maxUserSpeed = sptRequestA.carSpeed;
                 this.usesCar = true;
             }
@@ -238,18 +205,19 @@ public class SIsochrone extends RoutingResource {
         // TODO: OTP prefers to snap to car-roads/ways, which is not so nice, when walking,
         // and a footpath is closer by. So far there is no option to switch that off
 
+        Router router = otpServer.getRouter(routerId);
         // create the ShortestPathTree
         try {
-            sptRequestA.setRoutingContext(graphService.getGraph());
+            sptRequestA.setRoutingContext(router.graph);
         } catch (Exception e) {
             // if we get an exception here, and in particular a VertexNotFoundException,
             // then it is likely that we chose a (transit) mode without having that (transit) modes data
             LOG.debug("cannot set RoutingContext: " + e.toString());
             LOG.debug("cannot set RoutingContext: setting mode=WALK");
             sptRequestA.setMode(TraverseMode.WALK); // fall back to walk mode
-            sptRequestA.setRoutingContext(graphService.getGraph());
+            sptRequestA.setRoutingContext(router.graph);
         }
-        ShortestPathTree sptA = sptService.getShortestPathTree(sptRequestA);
+        ShortestPathTree sptA = new AStar().getShortestPathTree(sptRequestA);
         StreetLocation origin = (StreetLocation) sptRequestA.rctx.fromVertex;
         sptRequestA.cleanup(); // remove inserted points
 
@@ -260,7 +228,7 @@ public class SIsochrone extends RoutingResource {
         LineString pathToStreet = gf.createLineString(pathToStreetCoords);
 
         // get distance between origin and drop point for time correction
-        double distanceToRoad = this.distanceLibrary.distance(origin.getY(), origin.getX(),
+        double distanceToRoad = SphericalDistanceLibrary.distance(origin.getY(), origin.getX(),
                 dropPoint.y, dropPoint.x);
         long offRoadTimeCorrection = (long) (distanceToRoad / this.offRoadWalkspeed);
 
@@ -471,7 +439,7 @@ public class SIsochrone extends RoutingResource {
                 LOG.debug("done");
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            LOG.error("Exception creating isochrone", e);
         }
         return sw.toString();
     }
@@ -785,7 +753,7 @@ public class SIsochrone extends RoutingResource {
         Coordinate coord0 = line.getCoordinateN(0);
         Coordinate coord1 = line.getCoordinateN(numPoints - 1);
         int i = numPoints - 3;
-        while (distanceLibrary.fastDistance(coord0, coord1) < 10 && i >= 0) {
+        while (SphericalDistanceLibrary.fastDistance(coord0, coord1) < 10 && i >= 0) {
             coord1 = line.getCoordinateN(i--);
         }
 

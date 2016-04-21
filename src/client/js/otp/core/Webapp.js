@@ -111,12 +111,12 @@ otp.core.Webapp = otp.Class({
         // set the logo & title
 
         if(otp.config.showLogo) {
-          //$('<div id="logo"><a href="'+otp.config.siteURL+'"><img src="'+otp.config.logoGraphic+'" style="height:100%"></a></div>').appendTo('#branding');
-            $(Mustache.render(otp.templates.img, {
+          //$('<div id="logo"><a href="'+otp.config.siteUrl+'"><img src="'+otp.config.logoGraphic+'" style="height:100%"></a></div>').appendTo('#branding');
+            $(Mustache.render(otp.templates.img, { 
                 src : otp.config.logoGraphic,
                 style : 'height:100%',
                 wrapLink : true,
-                linkHref : otp.config.siteURL,
+                linkHref : otp.config.siteUrl,
                 wrapDiv : true,
                 divId : 'logo'
             })).appendTo('#branding');
@@ -131,7 +131,7 @@ otp.core.Webapp = otp.Class({
         if(otp.config.siteName !== undefined) {
             document.title = otp.config.siteName;
             if(otp.config.showTitle) {
-                $("<div id='site-title'><a href='"+otp.config.siteURL+"'>"+otp.config.siteName+"</a></div>").appendTo('#branding');
+                $("<div id='site-title'><a href='"+otp.config.siteUrl+"'>"+otp.config.siteName+"</a></div>").appendTo('#branding');
             }
         }
 
@@ -162,7 +162,7 @@ otp.core.Webapp = otp.Class({
 
         if(otp.config.showAddThis) {
             var addThisHtml = '<div id="addthis" class="addthis_toolbox addthis_default_style"\n';
-            addThisHtml += 'addthis:url="'+otp.config.siteURL+'"\n';
+            addThisHtml += 'addthis:url="'+otp.config.siteUrl+'"\n';
             addThisHtml += 'addthis:title="'+otp.config.addThisTitle+'"\n';
             addThisHtml += 'addthis:description="'+otp.config.siteDescription+'">\n';
             addThisHtml += '<a class="addthis_button_twitter"></a>\n';
@@ -275,10 +275,10 @@ otp.core.Webapp = otp.Class({
         }
 
 
-
-        // create the session manager, if needed
+        // set up any user-authenticated modules (e.g. Calltaker, FieldTrip)
         if(authModules.length > 0) {
 
+            // check for Trinet-authenticated modules
             var verifyLoginUrl, redirectUrl;
             for(var i = 0; i < authModules.length; i++) {
                 var authModule = authModules[i];
@@ -291,22 +291,29 @@ otp.core.Webapp = otp.Class({
 
             }
 
-            this.sessionManager = new otp.core.TrinetSessionManager(this, verifyLoginUrl, redirectUrl, $.proxy(function() {
+            // define the callback to be invoked by the session manager upon successful initialization
+            var sessionCallback = function() {
                 var setActive = false;
                 for(var i = 0; i < authModules.length; i++) {
                     var authModule = authModules[i];
-                    var roleIndex = authModule.authUserRoles.indexOf(this.sessionManager.role);
+                    var roleIndex = authModule.authUserRoles.indexOf(this_.sessionManager.role);
                     if(roleIndex !== -1) {
-                        this.addModule(authModule);
+                        this_.addModule(authModule);
                         if((roleIndex === 0 || authModule.config.isDefault) && !setActive) {
                             this_.setActiveModule(authModule);
                             setActive = true;
                         }
                     }
                 }
-            }, this));
-        }
+            };
 
+            if(verifyLoginUrl && redirectUrl) { // use Trinet-specific session manager
+                this.sessionManager = new otp.core.TrinetSessionManager(this, verifyLoginUrl, redirectUrl, sessionCallback);
+            }
+            else { // use default (non-Trinet) session manager
+                this.sessionManager = new otp.core.DefaultSessionManager(this, sessionCallback);
+            }
+        }
 
         // add the spinner
 

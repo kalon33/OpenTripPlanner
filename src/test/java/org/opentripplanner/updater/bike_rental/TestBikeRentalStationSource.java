@@ -32,7 +32,7 @@ public class TestBikeRentalStationSource extends TestCase {
             System.out.println(rentalStation);
         }
         BikeRentalStation stSulpice = rentalStations.get(0);
-        assertEquals("ZAC SAINT SULPICE", stSulpice.name);
+        assertEquals("ZAC SAINT SULPICE", stSulpice.name.toString());
         assertEquals("75", stSulpice.id);
         assertEquals(-1.63528, stSulpice.x);
         assertEquals(48.1321, stSulpice.y);
@@ -40,5 +40,23 @@ public class TestBikeRentalStationSource extends TestCase {
         assertEquals(6, stSulpice.bikesAvailable);
         BikeRentalStation kergus = rentalStations.get(3);
         assertEquals("12", kergus.id);
+    }
+
+    public void testSmoove() {
+        SmooveBikeRentalDataSource source = new SmooveBikeRentalDataSource();
+        source.setUrl("file:src/test/resources/bike/smoove.json");
+        assertTrue(source.update());
+        List<BikeRentalStation> rentalStations = source.getStations();
+        assertEquals(1, rentalStations.size());
+        for (BikeRentalStation rentalStation : rentalStations) {
+            System.out.println(rentalStation);
+        }
+        BikeRentalStation hamn = rentalStations.get(0);
+        assertEquals("004 Hamn", hamn.name.toString());
+        assertEquals("004 Hamn", hamn.id);
+        assertEquals(24.952269, hamn.x);
+        assertEquals(60.167913, hamn.y);
+        assertEquals(11, hamn.spacesAvailable);
+        assertEquals(1, hamn.bikesAvailable);
     }
 }

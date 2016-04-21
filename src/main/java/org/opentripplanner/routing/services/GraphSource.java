@@ -15,7 +15,7 @@ package org.opentripplanner.routing.services;
 
 import java.io.InputStream;
 
-import org.opentripplanner.routing.graph.Graph;
+import org.opentripplanner.standalone.Router;
 
 /**
  * A class responsible of graph creation / ownership.
@@ -34,7 +34,7 @@ public interface GraphSource {
     public interface Factory {
 
         /**
-         * @param routerId
+         * @param routerId Id of the router.
          * @return a new GraphSource for the given routerId.
          */
         public GraphSource createGraphSource(String routerId);
@@ -52,8 +52,11 @@ public interface GraphSource {
         public boolean save(String routerId, InputStream is);
     }
 
-    /** @return The graph object */
-    public Graph getGraph();
+    /**
+     * @return The router containing a graph object. Delegates to the Router lifecycle manager the
+     *         startup and shutdown of the graph.
+     */
+    public Router getRouter();
 
     /**
      * Reload the graph from it's source.
@@ -62,7 +65,8 @@ public interface GraphSource {
      * @param preEvict True to evict the old version *before* loading the new one. In that case the
      *        implementation have to take care of making the getGraph() call wait while the new
      *        graph is being loaded and not return null.
-     * @return False if a new graph has not been reloaded and this graph must be evicted.
+     * @return False if a new graph has not been reloaded and we could not keep the previous one: it
+     *         should be evicted.
      */
     public boolean reload(boolean force, boolean preEvict);
 

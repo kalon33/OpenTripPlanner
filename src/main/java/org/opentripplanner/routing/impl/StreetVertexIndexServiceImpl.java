@@ -14,76 +14,75 @@
 package org.opentripplanner.routing.impl;
 
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Locale;
-import java.util.ResourceBundle;
-import java.util.Set;
-
-import org.opentripplanner.common.geometry.DistanceLibrary;
-import org.opentripplanner.common.geometry.HashGridSpatialIndex;
-import org.opentripplanner.common.geometry.SphericalDistanceLibrary;
-import org.opentripplanner.common.model.GenericLocation;
-import org.opentripplanner.routing.core.RoutingRequest;
-import org.opentripplanner.routing.core.TraversalRequirements;
-import org.opentripplanner.routing.core.TraverseModeSet;
-import org.opentripplanner.routing.edgetype.FreeEdge;
-import org.opentripplanner.routing.edgetype.PatternEdge;
-import org.opentripplanner.routing.edgetype.StreetEdge;
-import org.opentripplanner.routing.graph.Edge;
-import org.opentripplanner.routing.graph.Graph;
-import org.opentripplanner.routing.graph.Vertex;
-import org.opentripplanner.routing.location.StreetLocation;
-import org.opentripplanner.routing.services.StreetVertexIndexService;
-import org.opentripplanner.routing.vertextype.StreetVertex;
-import org.opentripplanner.routing.vertextype.TransitStop;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.google.common.collect.Iterables;
 import com.vividsolutions.jts.geom.Coordinate;
 import com.vividsolutions.jts.geom.Envelope;
 import com.vividsolutions.jts.geom.LineString;
 import com.vividsolutions.jts.index.SpatialIndex;
 import com.vividsolutions.jts.index.strtree.STRtree;
+import org.opentripplanner.analyst.core.Sample;
+import org.opentripplanner.analyst.request.SampleFactory;
+import org.opentripplanner.common.geometry.GeometryUtils;
+import org.opentripplanner.common.geometry.HashGridSpatialIndex;
+import org.opentripplanner.common.geometry.SphericalDistanceLibrary;
+import org.opentripplanner.common.model.GenericLocation;
+import org.opentripplanner.common.model.P2;
+import org.opentripplanner.routing.core.RoutingRequest;
+import org.opentripplanner.routing.core.TraversalRequirements;
+import org.opentripplanner.routing.core.TraverseModeSet;
+import org.opentripplanner.routing.edgetype.*;
+import org.opentripplanner.routing.graph.Edge;
+import org.opentripplanner.routing.graph.Graph;
+import org.opentripplanner.routing.graph.Vertex;
+import org.opentripplanner.routing.location.TemporaryStreetLocation;
+import org.opentripplanner.routing.services.StreetVertexIndexService;
+import org.opentripplanner.routing.util.ElevationUtils;
+import org.opentripplanner.routing.vertextype.SampleVertex;
+import org.opentripplanner.routing.vertextype.StreetVertex;
+import org.opentripplanner.routing.vertextype.TransitStop;
+import org.opentripplanner.util.I18NString;
+import org.opentripplanner.util.NonLocalizedString;
+import org.opentripplanner.util.ResourceBundleSingleton;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.*;
 
 /**
- * Indexes all edges and transit vertices of the graph spatially. Has a variety of query methods used during network linking and trip planning.
+ * Indexes all edges and transit vertices of the graph spatially. Has a variety of query methods
+ * used during network linking and trip planning.
  * 
- * Creates a StreetLocation representing a location on a street that's not at an intersection, based on input latitude and longitude. Instantiating
- * this class is expensive, because it creates a spatial index of all of the intersections in the graph.
+ * Creates a TemporaryStreetLocation representing a location on a street that's not at an
+ * intersection, based on input latitude and longitude. Instantiating this class is expensive,
+ * because it creates a spatial index of all of the intersections in the graph.
  */
 public class StreetVertexIndexServiceImpl implements StreetVertexIndexService {
 
-    // Members are protected so that custom subclasses can access them.
-
-    protected Graph graph;
+    private Graph graph;
 
     /**
      * Contains only instances of {@link StreetEdge}
      */
-    protected SpatialIndex edgeTree;
-    protected SpatialIndex transitStopTree;
-    protected SpatialIndex verticesTree;
-
-    public DistanceLibrary distanceLibrary = SphericalDistanceLibrary.getInstance();
+    private SpatialIndex edgeTree;
+    private SpatialIndex transitStopTree;
+    private SpatialIndex verticesTree;
 
     // private static final double SEARCH_RADIUS_M = 100; // meters
     // private static final double SEARCH_RADIUS_DEG = DistanceLibrary.metersToDegrees(SEARCH_RADIUS_M);
 
-    /* all distance constants here are plate-carée Euclidean, 0.001 ~= 100m at equator */
-
-    // Edges will only be found if they are closer than this distance
-    public static final double MAX_DISTANCE_FROM_STREET = 0.01000;
-
-    // Maximum difference in distance for two geometries to be considered coincident
+    // Maximum difference in distance for two geometries to be considered coincident, plate-carée Euclidean
+    // 0.001 ~= 100m at equator
     public static final double DISTANCE_ERROR = 0.000001;
 
     // If a point is within MAX_CORNER_DISTANCE, it is treated as at the corner.
     private static final double MAX_CORNER_DISTANCE_METERS = 10;
+    
+    // Edges will only be found if they are closer than this distance
+    // TODO: this default may be too large?
+    public static final double MAX_DISTANCE_FROM_STREET_METERS = 1000;
+    
+    private static final double MAX_DISTANCE_FROM_STREET_DEGREES =
+            MAX_DISTANCE_FROM_STREET_METERS * 180 / Math.PI / SphericalDistanceLibrary.RADIUS_OF_EARTH_IN_M;
 
     static final Logger LOG = LoggerFactory.getLogger(StreetVertexIndexServiceImpl.class);
 
@@ -107,6 +106,103 @@ public class StreetVertexIndexServiceImpl implements StreetVertexIndexService {
             ((STRtree) edgeTree).build();
             ((STRtree) transitStopTree).build();
         }
+    }
+
+    /**
+     * Creates a TemporaryStreetLocation on the given street (set of PlainStreetEdges). How far
+     * along is controlled by the location parameter, which represents a distance along the edge
+     * between 0 (the from vertex) and 1 (the to vertex).
+     *
+     * @param graph
+     *
+     * @param label
+     * @param name
+     * @param edges A collection of nearby edges, which represent one street.
+     * @param nearestPoint
+     *
+     * @return the new TemporaryStreetLocation
+     */
+    public static TemporaryStreetLocation createTemporaryStreetLocation(Graph graph, String label,
+            I18NString name, Iterable<StreetEdge> edges, Coordinate nearestPoint, boolean endVertex) {
+        boolean wheelchairAccessible = false;
+
+        TemporaryStreetLocation location = new TemporaryStreetLocation(label, nearestPoint, name,
+                endVertex);
+        for (StreetEdge street : edges) {
+            Vertex fromv = street.getFromVertex();
+            Vertex tov = street.getToVertex();
+            wheelchairAccessible |= ((StreetEdge) street).isWheelchairAccessible();
+            /* forward edges and vertices */
+            Vertex edgeLocation;
+            if (SphericalDistanceLibrary.distance(nearestPoint, fromv.getCoordinate()) < 1) {
+                // no need to link to area edges caught on-end
+                edgeLocation = fromv;
+
+                if (endVertex) {
+                    new TemporaryFreeEdge(edgeLocation, location);
+                } else {
+                    new TemporaryFreeEdge(location, edgeLocation);
+                }
+            } else if (SphericalDistanceLibrary.distance(nearestPoint, tov.getCoordinate()) < 1) {
+                // no need to link to area edges caught on-end
+                edgeLocation = tov;
+
+                if (endVertex) {
+                    new TemporaryFreeEdge(edgeLocation, location);
+                } else {
+                    new TemporaryFreeEdge(location, edgeLocation);
+                }
+            } else {
+                // location is somewhere in the middle of the edge.
+                edgeLocation = location;
+
+                // creates links from street head -> location -> street tail.
+                createHalfLocation(location, name,
+                        nearestPoint, street, endVertex);
+            }
+        }
+        location.setWheelchairAccessible(wheelchairAccessible);
+        return location;
+
+    }
+
+    private static void createHalfLocation(TemporaryStreetLocation base, I18NString name,
+                Coordinate nearestPoint, StreetEdge street, boolean endVertex) {
+        StreetVertex tov = (StreetVertex) street.getToVertex();
+        StreetVertex fromv = (StreetVertex) street.getFromVertex();
+        LineString geometry = street.getGeometry();
+
+        P2<LineString> geometries = getGeometry(street, nearestPoint);
+
+        double totalGeomLength = geometry.getLength();
+        double lengthRatioIn = geometries.first.getLength() / totalGeomLength;
+
+        double lengthIn = street.getDistance() * lengthRatioIn;
+        double lengthOut = street.getDistance() * (1 - lengthRatioIn);
+
+        if (endVertex) {
+            TemporaryPartialStreetEdge temporaryPartialStreetEdge = new TemporaryPartialStreetEdge(
+                    street, fromv, base, geometries.first, name, lengthIn);
+
+            temporaryPartialStreetEdge.setElevationProfile(ElevationUtils
+                    .getPartialElevationProfile(street.getElevationProfile(), 0, lengthIn), false);
+            temporaryPartialStreetEdge.setNoThruTraffic(street.isNoThruTraffic());
+            temporaryPartialStreetEdge.setStreetClass(street.getStreetClass());
+        } else {
+            TemporaryPartialStreetEdge temporaryPartialStreetEdge = new TemporaryPartialStreetEdge(
+                    street, base, tov, geometries.second, name, lengthOut);
+
+            temporaryPartialStreetEdge.setElevationProfile(ElevationUtils
+                    .getPartialElevationProfile(street.getElevationProfile(), lengthIn,
+                    lengthIn + lengthOut), false);
+            temporaryPartialStreetEdge.setStreetClass(street.getStreetClass());
+            temporaryPartialStreetEdge.setNoThruTraffic(street.isNoThruTraffic());
+        }
+    }
+
+    private static P2<LineString> getGeometry(StreetEdge e, Coordinate nearestPoint) {
+        LineString geometry = e.getGeometry();
+        return GeometryUtils.splitGeometryAtPoint(geometry, nearestPoint);
     }
 
     @SuppressWarnings("rawtypes")
@@ -155,7 +251,7 @@ public class StreetVertexIndexServiceImpl implements StreetVertexIndexService {
         List<TransitStop> nearby = getTransitStopForEnvelope(env);
         List<TransitStop> results = new ArrayList<TransitStop>();
         for (TransitStop v : nearby) {
-            if (distanceLibrary.distance(v.getCoordinate(), coordinate) <= radius) {
+            if (SphericalDistanceLibrary.distance(v.getCoordinate(), coordinate) <= radius) {
                 results.add(v);
             }
         }
@@ -165,27 +261,37 @@ public class StreetVertexIndexServiceImpl implements StreetVertexIndexService {
     /**
      * Convenience helper for when extraEdges is empty/null.
      */
-    private Vertex getClosestVertex(final GenericLocation location, RoutingRequest options) {
-        return getClosestVertex(location, options, null);
+    private Vertex getClosestVertex(final GenericLocation location, RoutingRequest options,
+                                    boolean endVertex) {
+        return getClosestVertex(location, options, null, endVertex);
     }
 
     /**
      * Returns the closest vertex for this GenericLocation. If necessary, this vertex will be created by splitting nearby edges (non-permanently).
      * 
-     * This method is the heart of the logic that searches for the start and endpoints of RideRequests. As such, it is protected so that subclasses
-     * can override the search behavior.
+     * This method is the heart of the logic that searches for the start and endpoints of a
+     * RoutingRequest.
      */
-    protected Vertex getClosestVertex(final GenericLocation location, RoutingRequest options,
-            List<Edge> extraEdges) {
+    private Vertex getClosestVertex(final GenericLocation location, RoutingRequest options,
+            List<Edge> extraEdges, boolean endVertex) {
         LOG.debug("Looking for/making a vertex near {}", location);
 
         // first, check for intersections very close by
         Coordinate coord = location.getCoordinate();
         StreetVertex intersection = getIntersectionAt(coord);
-        String calculatedName = location.name;
+        I18NString calculatedName = null;
+        Locale locale;
+        if (options == null) {
+            locale = ResourceBundleSingleton.INSTANCE.getDefaultLocale();
+        } else {
+            locale = options.locale;
+        }
+        if (location.name != null) {
+            calculatedName = new NonLocalizedString(location.name);
+        }
         if (intersection != null) {
             // We have an intersection vertex. Check that this vertex has edges we can traverse.
-            boolean canEscape = false; 
+            boolean canEscape = false;
             if (options == null) {
                 canEscape = true; // Some tests do not supply options.
             } else {
@@ -203,36 +309,18 @@ public class StreetVertexIndexServiceImpl implements StreetVertexIndexService {
                 // Coordinate is at an intersection or street endpoint, and has traversible edges.
                 if (!location.hasName()) {
                     LOG.debug("found intersection {}. not splitting.", intersection);
-                    // generate names for corners when no name was given
-                    Set<String> uniqueNameSet = new HashSet<String>();
-                    for (Edge e : intersection.getOutgoing()) {
-                        if (e instanceof StreetEdge) {
-                            uniqueNameSet.add(e.getName());
-                        }
-                    }
-                    List<String> uniqueNames = new ArrayList<String>(uniqueNameSet);
-                    Locale locale;
-                    if (options == null) {
-                        locale = new Locale("en");
-                    } else {
-                        locale = options.locale;
-                    }
-                    ResourceBundle resources = ResourceBundle.getBundle("internals", locale);
-                    String fmt = resources.getString("corner");
-                    if (uniqueNames.size() > 1) {
-                        calculatedName = String.format(fmt, uniqueNames.get(0), uniqueNames.get(1));
-                    } else if (uniqueNames.size() == 1) {
-                        calculatedName = uniqueNames.get(0);
-                    } else {
-                        calculatedName = resources.getString("unnamedStreet");
-                    }
+
+                    calculatedName = intersection.getIntersectionName(locale);
+
                 }
-                StreetLocation closest = new StreetLocation(graph, "corner " + Math.random(), coord,
-                        calculatedName);
-                FreeEdge e = new FreeEdge(closest, intersection);
-                closest.getExtra().add(e);
-                e = new FreeEdge(intersection, closest);
-                closest.getExtra().add(e);
+                TemporaryStreetLocation closest = new TemporaryStreetLocation(
+                        "corner " + Math.random(), coord, calculatedName, endVertex);
+                if (endVertex) {
+                    new TemporaryFreeEdge(intersection, closest);
+                } else {
+                    new TemporaryFreeEdge(closest, intersection);
+                }
+
                 return closest;
             }
         }
@@ -247,7 +335,7 @@ public class StreetVertexIndexServiceImpl implements StreetVertexIndexService {
             for (TransitStop v : getNearbyTransitStops(coord, 1000)) {
                 if (!v.isStreetLinkable()) continue;
 
-                double d = distanceLibrary.distance(v.getCoordinate(), coord);
+                double d = SphericalDistanceLibrary.distance(v.getCoordinate(), coord);
                 if (d < closestStopDistance) {
                     closestStopDistance = d;
                     closestStop = v;
@@ -257,21 +345,22 @@ public class StreetVertexIndexServiceImpl implements StreetVertexIndexService {
         LOG.debug(" best stop: {} distance: {}", closestStop, closestStopDistance);
 
         // then find closest walkable street
-        StreetLocation closestStreet = null;
+        TemporaryStreetLocation closestStreet = null;
         CandidateEdgeBundle bundle = getClosestEdges(location, options, extraEdges, null, false);
         CandidateEdge candidate = bundle.best;
         double closestStreetDistance = Double.POSITIVE_INFINITY;
         if (candidate != null) {
             StreetEdge bestStreet = candidate.edge;
             Coordinate nearestPoint = candidate.nearestPointOnEdge;
-            closestStreetDistance = distanceLibrary.distance(coord, nearestPoint);
+            closestStreetDistance = SphericalDistanceLibrary.distance(coord, nearestPoint);
             LOG.debug("best street: {} dist: {}", bestStreet.toString(), closestStreetDistance);
-            if (calculatedName == null || "".equals(calculatedName)) {
-                calculatedName = bestStreet.getName();
+            if (calculatedName == null || "".equals(calculatedName.toString(locale))) {
+                calculatedName = new NonLocalizedString(bestStreet.getName(locale));
             }
-            String closestName = String.format("%s_%s", bestStreet.getName(), location.toString());
-            closestStreet = StreetLocation.createStreetLocation(graph, closestName, calculatedName,
-                    bundle.toEdgeList(), nearestPoint, coord);
+            //TODO: Where is this closestName actually used?
+            String closestName = String.format("%s_%s", calculatedName.toString(locale), location.toString());
+            closestStreet = createTemporaryStreetLocation(graph, closestName, calculatedName,
+                    bundle.toEdgeList(), nearestPoint, endVertex);
         }
 
         // decide whether to return street, or street + stop
@@ -286,7 +375,11 @@ public class StreetVertexIndexServiceImpl implements StreetVertexIndexService {
                 double relativeStopDistance = closestStopDistance / closestStreetDistance;
                 if (relativeStopDistance < 1.5) {
                     LOG.debug("linking transit stop to street (distances are comparable)");
-                    closestStreet.addExtraEdgeTo(closestStop);
+                    if (endVertex) {
+                        new TemporaryFreeEdge(closestStop, closestStreet);
+                    } else {
+                        new TemporaryFreeEdge(closestStreet, closestStop);
+                    }
                 }
             }
             LOG.debug("returning split street");
@@ -340,29 +433,24 @@ public class StreetVertexIndexServiceImpl implements StreetVertexIndexService {
         Coordinate coordinate = location.getCoordinate();
         Envelope envelope = new Envelope(coordinate);
 
-        // Collect the extra StreetEdges to consider.
-        Iterable<StreetEdge> extraStreets = Iterables.filter(graph.getTemporaryEdges(),
-                StreetEdge.class);
-        if (extraEdges != null) {
-            extraStreets = Iterables.concat(Iterables.filter(extraEdges, StreetEdge.class),
-                    extraStreets);
-        }
-
-        double envelopeGrowthAmount = 0.001; // ~= 100 meters
+        double envelopeGrowthAmount = 0.001; // ~= 100 meters at equator
+        
+        // in latitude degrees, converted to longitude degrees as needed
         double radius = 0;
+        
+        double xscale = Math.cos(coordinate.y * Math.PI / 180);
+        
         CandidateEdgeBundle candidateEdges = new CandidateEdgeBundle();
         while (candidateEdges.size() == 0) {
             // expand envelope -- assumes many close searches and occasional far ones
-            envelope.expandBy(envelopeGrowthAmount);
+            // scale the latitude degrees so that longitude is equivalent
+            envelope.expandBy(envelopeGrowthAmount / xscale, envelopeGrowthAmount);
             radius += envelopeGrowthAmount;
-            if (radius > MAX_DISTANCE_FROM_STREET) {
+            if (radius > MAX_DISTANCE_FROM_STREET_DEGREES) {
                 return candidateEdges; // empty list
             }
 
             Iterable<Edge> nearbyEdges = getEdgesForEnvelope(envelope);
-            if (nearbyEdges != null) {
-                nearbyEdges = Iterables.concat(nearbyEdges, extraStreets);
-            }
 
             // oh. This is part of the problem: we're not linking to one-way
             // streets, even though that is a perfectly reasonable thing to do.
@@ -381,17 +469,19 @@ public class StreetVertexIndexServiceImpl implements StreetVertexIndexService {
                 }
 
                 // Compute preference value
-                double preferrence = 1;
+                double preference = 1;
                 if (preferredEdges != null && preferredEdges.contains(e)) {
-                    preferrence = 3.0;
+                    preference = 3.0;
                 }
 
                 TraverseModeSet modes = reqs.modes;
-                CandidateEdge ce = new CandidateEdge(se, location, preferrence, modes);
+                CandidateEdge ce = new CandidateEdge(se, location, preference, modes);
 
                 // Even if an edge is outside the query envelope, bounding boxes can
                 // still intersect. In this case, distance to the edge is greater
                 // than the query envelope size.
+                // The distance is represented in latitude degrees regardless of direction because the
+                // coordinate system is scaled
                 if (ce.distance < radius) {
                     candidateEdges.add(ce);
                 }
@@ -432,7 +522,7 @@ public class StreetVertexIndexServiceImpl implements StreetVertexIndexService {
      * @param possibleTransitLinksOnly only return edges traversable by cars or are platforms
      * @return
      */
-    protected CandidateEdgeBundle getClosestEdges(GenericLocation location, RoutingRequest request,
+    private CandidateEdgeBundle getClosestEdges(GenericLocation location, RoutingRequest request,
             List<Edge> extraEdges, Collection<Edge> preferredEdges, boolean possibleTransitLinksOnly) {
         // NOTE(flamholz): if request is null, will initialize TraversalRequirements
         // that accept all modes of travel.
@@ -456,7 +546,8 @@ public class StreetVertexIndexServiceImpl implements StreetVertexIndexService {
         double bestDistanceMeter = Double.POSITIVE_INFINITY;
         for (Vertex v : nearby) {
             if (v instanceof StreetVertex) {
-                double distanceMeter = distanceLibrary.fastDistance(coordinate, v.getCoordinate());
+                v.getLabel().startsWith("osm:");
+                double distanceMeter = SphericalDistanceLibrary.fastDistance(coordinate, v.getCoordinate());
                 if (distanceMeter < MAX_CORNER_DISTANCE_METERS) {
                     if (distanceMeter < bestDistanceMeter) {
                         bestDistanceMeter = distanceMeter;
@@ -467,26 +558,13 @@ public class StreetVertexIndexServiceImpl implements StreetVertexIndexService {
         }
         return nearest;
     }
-
+    
     @Override
-    public Vertex getVertexForLocation(GenericLocation location, RoutingRequest options) {
-        return getVertexForLocation(location, options, null);
-    }
-
-    /**
-     * @param other: non-null when another vertex has already been found. When the from vertex has 
-     * already been made/found, that vertex is passed in when finding/creating the to vertex. 
-     * TODO: This appears to be for reusing the extra edges list -- is this still needed?
-     */
-    @Override
-    public Vertex getVertexForLocation(GenericLocation loc, RoutingRequest options, Vertex other) {
+    public Vertex getVertexForLocation(GenericLocation loc, RoutingRequest options,
+                                       boolean endVertex) {
         Coordinate c = loc.getCoordinate();
         if (c != null) {
-            if (other instanceof StreetLocation) {
-                return getClosestVertex(loc, options, ((StreetLocation) other).getExtra());
-            } else {
-                return getClosestVertex(loc, options);
-            }
+            return getClosestVertex(loc, options, endVertex);
         }
 
         // No Coordinate available.
@@ -504,5 +582,42 @@ public class StreetVertexIndexServiceImpl implements StreetVertexIndexService {
     @Override
     public String toString() {
         return getClass().getName() + " -- edgeTree: " + edgeTree.toString() + " -- verticesTree: " + verticesTree.toString();
+    }
+
+    @Override
+    public Coordinate getClosestPointOnStreet(Coordinate c) {
+        CandidateEdge e = getClosestEdges(new GenericLocation(c), new TraversalRequirements()).best;
+        return e != null ? e.nearestPointOnEdge : null;
+    }
+
+    @Override
+    public Vertex getSampleVertexAt(Coordinate coordinate, boolean dest) {
+        SampleFactory sfac = graph.getSampleFactory();
+
+        Sample s = sfac.getSample(coordinate.x, coordinate.y);
+
+        if (s == null)
+            return null;
+
+        // create temp vertex
+        SampleVertex v = new SampleVertex(graph, coordinate);
+
+        // create edges
+        if (dest) {
+            if (s.v0 != null)
+                new SampleEdge(s.v0, v, s.d0);
+
+            if (s.v1 != null)
+                new SampleEdge(s.v1, v, s.d1);
+        }
+        else {
+            if (s.v0 != null)
+                new SampleEdge(v, s.v0, s.d0);
+
+            if (s.v1 != null)
+                new SampleEdge(v, s.v1, s.d1);
+        }
+
+        return v;
     }
 }

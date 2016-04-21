@@ -7,6 +7,7 @@ import org.onebusaway.gtfs.model.Stop;
 import org.onebusaway.gtfs.model.Trip;
 import org.opentripplanner.routing.core.ServiceDay;
 import org.opentripplanner.routing.edgetype.Timetable;
+import org.opentripplanner.routing.trippattern.RealTimeState;
 import org.opentripplanner.routing.trippattern.TripTimes;
 
 import com.beust.jcommander.internal.Lists;
@@ -21,8 +22,10 @@ public class TripTimeShort {
     public int realtimeDeparture = UNDEFINED ;
     public int arrivalDelay = UNDEFINED ;
     public int departureDelay = UNDEFINED ;
+    public int stopIndex = UNDEFINED ;
     public boolean timepoint = false;
     public boolean realtime = false;
+    public RealTimeState realtimeState = RealTimeState.SCHEDULED ;
     public long serviceDay;
     public AgencyAndId tripId;
 
@@ -31,6 +34,7 @@ public class TripTimeShort {
      */
     public TripTimeShort(TripTimes tt, int i, Stop stop) {
         stopId = stop.getId();
+        stopIndex          = i;
         scheduledArrival   = tt.getScheduledArrivalTime(i);
         realtimeArrival    = tt.getArrivalTime(i);
         arrivalDelay       = tt.getArrivalDelay(i);
@@ -39,11 +43,12 @@ public class TripTimeShort {
         departureDelay     = tt.getDepartureDelay(i);
         timepoint          = tt.isTimepoint(i);
         realtime           = !tt.isScheduled();
+        tripId             = tt.trip.getId();
+        realtimeState      = tt.getRealTimeState();
     }
 
     public TripTimeShort(TripTimes tt, int i, Stop stop, ServiceDay sd) {
         this(tt, i, stop);
-        tripId = tt.trip.getId();
         serviceDay = sd.time(0);
     }
 

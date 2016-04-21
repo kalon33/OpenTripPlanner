@@ -32,6 +32,8 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.StreamingOutput;
 
+import org.geotools.data.DefaultTransaction;
+import org.geotools.data.Transaction;
 import org.geotools.data.shapefile.ShapefileDataStore;
 import org.geotools.data.simple.SimpleFeatureCollection;
 import org.geotools.data.simple.SimpleFeatureStore;
@@ -46,6 +48,7 @@ import org.opentripplanner.analyst.request.IsoChroneRequest;
 import org.opentripplanner.api.common.RoutingResource;
 import org.opentripplanner.common.model.GenericLocation;
 import org.opentripplanner.routing.core.RoutingRequest;
+import org.opentripplanner.standalone.Router;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,6 +84,10 @@ public class LIsochrone extends RoutingResource {
     @DefaultValue("200")
     private Integer precisionMeters;
 
+    @QueryParam("offRoadDistanceMeters")
+    @DefaultValue("150")
+    private Integer offRoadDistanceMeters;
+
     @QueryParam("coordinateOrigin")
     private String coordinateOrigin = null;
 
@@ -110,8 +117,18 @@ public class LIsochrone extends RoutingResource {
         LOG.debug("writing out shapefile {}", shapeFile);
         ShapefileDataStore outStore = new ShapefileDataStore(shapeFile.toURI().toURL());
         outStore.createSchema(contourSchema);
+        Transaction transaction = new DefaultTransaction("create");
         SimpleFeatureStore featureStore = (SimpleFeatureStore) outStore.getFeatureSource();
-        featureStore.addFeatures(contourFeatures);
+        featureStore.setTransaction(transaction);
+        try {
+            featureStore.addFeatures(contourFeatures);
+            transaction.commit();
+        } catch (Exception e) {
+            transaction.rollback();
+            throw e;
+        } finally {
+            transaction.close();
+        }
         shapeDir.deleteOnExit(); // Note: the order is important
         for (File f : shapeDir.listFiles())
             f.deleteOnExit();
@@ -157,14 +174,17 @@ public class LIsochrone extends RoutingResource {
             debug = false;
         if (precisionMeters < 10)
             throw new IllegalArgumentException("Too small precisionMeters: " + precisionMeters);
+        if (offRoadDistanceMeters < 10)
+            throw new IllegalArgumentException("Too small offRoadDistanceMeters: " + offRoadDistanceMeters);
 
         IsoChroneRequest isoChroneRequest = new IsoChroneRequest(cutoffSecList);
         isoChroneRequest.includeDebugGeometry = debug;
         isoChroneRequest.precisionMeters = precisionMeters;
+        isoChroneRequest.offRoadDistanceMeters = offRoadDistanceMeters;
         if (coordinateOrigin != null)
             isoChroneRequest.coordinateOrigin = new GenericLocation(null, coordinateOrigin)
                     .getCoordinate();
-        RoutingRequest sptRequest = buildRequest(0);
+        RoutingRequest sptRequest = buildRequest();
 
         if (maxTimeSec != null) {
             isoChroneRequest.maxTimeSec = maxTimeSec;
@@ -172,7 +192,8 @@ public class LIsochrone extends RoutingResource {
             isoChroneRequest.maxTimeSec = isoChroneRequest.maxCutoffSec;
         }
 
-        return otpServer.isoChroneSPTRenderer.getIsochrones(isoChroneRequest, sptRequest);
+        Router router = otpServer.getRouter(routerId);
+        return router.isoChroneSPTRenderer.getIsochrones(isoChroneRequest, sptRequest);
     }
 
     static SimpleFeatureType makeContourSchema() {
@@ -180,17 +201,18 @@ public class LIsochrone extends RoutingResource {
         SimpleFeatureTypeBuilder tbuilder = new SimpleFeatureTypeBuilder();
         tbuilder.setName("contours");
         tbuilder.setCRS(DefaultGeographicCRS.WGS84);
-        tbuilder.add("Geometry", MultiPolygon.class);
-        tbuilder.add("Time", Integer.class); // TODO change to something more descriptive and lowercase
+        // Do not use "geom" or "geometry" below, it seems to broke shapefile generation
+        tbuilder.add("the_geom", MultiPolygon.class);
+        tbuilder.add("time", Integer.class); // TODO change to something more descriptive and lowercase
         return tbuilder.buildFeatureType();
     }
 
     // TODO Extract this to utility package?
     private static class DirectoryZipper implements StreamingOutput {
         private File directory;
-        
-        DirectoryZipper(File directory){
-        	this.directory = directory;
+
+        DirectoryZipper(File directory) {
+            this.directory = directory;
         }
 
         @Override

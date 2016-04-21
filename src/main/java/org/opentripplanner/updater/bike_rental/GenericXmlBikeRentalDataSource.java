@@ -18,14 +18,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.prefs.Preferences;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import org.opentripplanner.routing.bike_rental.BikeRentalStation;
 import org.opentripplanner.routing.graph.Graph;
-import org.opentripplanner.updater.PreferencesConfigurable;
+import org.opentripplanner.updater.JsonConfigurable;
 import org.opentripplanner.util.xml.XmlDataListDownloader;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public abstract class GenericXmlBikeRentalDataSource implements BikeRentalDataSource, PreferencesConfigurable {
+public abstract class GenericXmlBikeRentalDataSource implements BikeRentalDataSource, JsonConfigurable {
 
     private static final Logger LOG = LoggerFactory.getLogger(GenericXmlBikeRentalDataSource.class);
 
@@ -34,6 +35,7 @@ public abstract class GenericXmlBikeRentalDataSource implements BikeRentalDataSo
     List<BikeRentalStation> stations = new ArrayList<BikeRentalStation>();
 
     private XmlDataListDownloader<BikeRentalStation> xmlDownloader;
+
 
     public GenericXmlBikeRentalDataSource(String path) {
         xmlDownloader = new XmlDataListDownloader<BikeRentalStation>();
@@ -51,7 +53,7 @@ public abstract class GenericXmlBikeRentalDataSource implements BikeRentalDataSo
 
     @Override
     public boolean update() {
-        List<BikeRentalStation> newStations = xmlDownloader.download(url);
+        List<BikeRentalStation> newStations = xmlDownloader.download(url, false);
         if (newStations != null) {
             synchronized(this) {
                 stations = newStations;
@@ -67,6 +69,11 @@ public abstract class GenericXmlBikeRentalDataSource implements BikeRentalDataSo
         return stations;
     }
 
+    public void setReadAttributes(boolean readAttributes) {
+        // if readAttributes is true, read XML attributes of selected elements, instead of children
+        xmlDownloader.setReadAttributes(readAttributes);
+    }
+
     public void setUrl(String url) {
         this.url = url;
     }
@@ -79,10 +86,11 @@ public abstract class GenericXmlBikeRentalDataSource implements BikeRentalDataSo
     }
     
     @Override
-    public void configure(Graph graph, Preferences preferences) {
-        String url = preferences.get("url", null);
-        if (url == null)
+    public void configure(Graph graph, JsonNode config) {
+        String url = config.path("url").asText();
+        if (url == null) {
             throw new IllegalArgumentException("Missing mandatory 'url' configuration.");
+        }
         setUrl(url);
     }
 }

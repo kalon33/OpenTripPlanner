@@ -13,9 +13,8 @@
 
 package org.opentripplanner.routing.services;
 
-import java.util.Collection;
-import java.util.List;
-
+import com.vividsolutions.jts.geom.Coordinate;
+import com.vividsolutions.jts.geom.Envelope;
 import org.opentripplanner.common.model.GenericLocation;
 import org.opentripplanner.routing.core.RoutingRequest;
 import org.opentripplanner.routing.core.TraversalRequirements;
@@ -24,8 +23,8 @@ import org.opentripplanner.routing.graph.Vertex;
 import org.opentripplanner.routing.impl.CandidateEdgeBundle;
 import org.opentripplanner.routing.vertextype.TransitStop;
 
-import com.vividsolutions.jts.geom.Coordinate;
-import com.vividsolutions.jts.geom.Envelope;
+import java.util.Collection;
+import java.util.List;
 
 public interface StreetVertexIndexService {
 
@@ -86,20 +85,23 @@ public interface StreetVertexIndexService {
     /**
      * Finds the appropriate vertex for this location.
      * 
-     * @param location
-     * @param options
-     * @return
-     */
-    public Vertex getVertexForLocation(GenericLocation location, RoutingRequest options);
-
-    /**
-     * Finds the appropriate vertex for this location.
-     * 
      * @param place
      * @param options
-     * @param other non-null when another vertex has already been found. Passed in so that any extra edges made when locating the previous vertex may
-     *        be used to locate this one as well.
+     * @param endVertex: whether this is a start vertex (if it's false) or end vertex (if it's true)
      * @return
      */
-    public Vertex getVertexForLocation(GenericLocation place, RoutingRequest options, Vertex other);
+    public Vertex getVertexForLocation(GenericLocation place, RoutingRequest options,
+                                       boolean endVertex);
+
+    /**
+     * Finds the on-street coordinate closest to a given coordinate
+     *
+     * @param coordinate The coordinate to be found on the street network
+     * @return The on-street {@link Coordinate} that's closest to the given input {@link Coordinate}
+     */
+    public Coordinate getClosestPointOnStreet(Coordinate coordinate);
+
+	/** Get a vertex at a given coordinate, using the same logic as in Samples. Used in Analyst
+	 * so that origins and destinations are linked the same way. */
+	public Vertex getSampleVertexAt(Coordinate coordinate, boolean dest);
 }

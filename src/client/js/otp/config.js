@@ -100,8 +100,8 @@ otp.config = {
      * properties, when set, override that behavioir.
      */
      
-    initLatLng : new L.LatLng(44.837912, -0.579541),
-    initZoom : 11,
+    initLatLng : new L.LatLng(45.1913216, 5.7289624),
+    initZoom : 12,
     // minZoom : 10,
     // maxZoom : 20,
     
@@ -112,16 +112,16 @@ otp.config = {
      * Site name / description / branding display options
      */
 
-    siteName            : "Planificateur de trajets sur l'Aquitaine",
+    siteName            : "Planificateur de trajets sur Grenoble",
     siteDescription     : "Une instance d'OpenTripPlanner",
     logoGraphic         : 'images/otp_logo_darkbg_40px.png',
-    bikeshareName    : "VCub",
+//    bikeshareName    : "VCub",
     //Enable this if you want to show frontend language chooser
     showLanguageChooser : true,
 
     showLogo            : true,
     showTitle           : true,
-    showModuleSelector  : true,
+    showModuleSelector  : false,
     metric              : false,
 
 
@@ -143,14 +143,14 @@ otp.config = {
             className : 'otp.modules.multimodal.MultimodalPlannerModule',
             defaultBaseLayer : 'MapQuest OSM',
             isDefault: true
-        },
-        {
-            id : 'bikeshare',
-            className : 'otp.modules.bikeshare.BikeShareModule'
-        },
-        {
-            id : 'analyst',
-            className : 'otp.modules.analyst.AnalystModule'
+//        },
+//        {
+//            id : 'bikeshare',
+//            className : 'otp.modules.bikeshare.BikeShareModule'
+//        },
+//        {
+//            id : 'analyst',
+//            className : 'otp.modules.analyst.AnalystModule'
         }
 
     ],
@@ -326,8 +326,8 @@ otp.config.modes = {
     // IDEA: maybe we start with a big array (like below), and the pull out modes from this array when turning off various modes...
     //TRANSLATORS: Travel by: mode of transport (Used in selection in Travel
     //Options widgets)
-    'WALK,BICYCLE_RENT'        :_tr('Rented Bicycle'),
+//    'WALK,BICYCLE_RENT'        :_tr('Rented Bicycle'),
     //TRANSLATORS: Travel by: mode of transport (Used in selection in Travel
     //Options widgets)
-    'TRANSIT,WALK,BICYCLE_RENT': _tr('Transit & Rented Bicycle')
+//    'TRANSIT,WALK,BICYCLE_RENT': _tr('Transit & Rented Bicycle')
     };

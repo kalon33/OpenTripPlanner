@@ -1,7 +1,5 @@
 package org.opentripplanner.graph_builder.linking;
 
-import com.google.common.base.Predicate;
-import com.google.common.collect.Collections2;
 import com.google.common.collect.Iterables;
 import com.vividsolutions.jts.geom.Coordinate;
 import com.vividsolutions.jts.geom.Envelope;
@@ -25,20 +23,23 @@ import org.opentripplanner.routing.edgetype.StreetBikeParkLink;
 import org.opentripplanner.routing.edgetype.StreetBikeRentalLink;
 import org.opentripplanner.routing.edgetype.StreetEdge;
 import org.opentripplanner.routing.edgetype.StreetTransitLink;
+import org.opentripplanner.routing.graph.Edge;
 import org.opentripplanner.routing.graph.Graph;
 import org.opentripplanner.routing.graph.Vertex;
 import org.opentripplanner.routing.vertextype.BikeParkVertex;
 import org.opentripplanner.routing.vertextype.BikeRentalStationVertex;
 import org.opentripplanner.routing.vertextype.SplitterVertex;
 import org.opentripplanner.routing.vertextype.StreetVertex;
+import org.opentripplanner.routing.vertextype.TemporarySplitterVertex;
+import org.opentripplanner.routing.vertextype.TemporaryVertex;
 import org.opentripplanner.routing.vertextype.TransitStop;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * This class links transit stops to streets by splitting the streets (unless the stop is extremely close to the street
@@ -66,7 +67,7 @@ public class SimpleStreetSplitter {
 
     private Graph graph;
 
-    private HashGridSpatialIndex<StreetEdge> idx;
+    private HashGridSpatialIndex<Edge> idx;
 
     private static GeometryFactory geometryFactory = GeometryUtils.getGeometryFactory();
 
@@ -74,16 +75,34 @@ public class SimpleStreetSplitter {
      * Construct a new SimpleStreetSplitter. Be aware that only one SimpleStreetSplitter should be
      * active on a graph at any given time.
      * @param graph
+     * @param hashGridSpatialIndex If not null this index is used instead of creating new one
      */
-    public SimpleStreetSplitter (Graph graph) {
+    public SimpleStreetSplitter(Graph graph, HashGridSpatialIndex<Edge> hashGridSpatialIndex) {
         this.graph = graph;
 
-        // build a nice private spatial index, since we're adding and removing edges
-        idx = new HashGridSpatialIndex<StreetEdge>();
+        //We build a spatial index if it isn't provided
+        if (hashGridSpatialIndex == null) {
+            // build a nice private spatial index, since we're adding and removing edges
+            idx = new HashGridSpatialIndex<Edge>();
 
-        for (StreetEdge se : Iterables.filter(graph.getEdges(), StreetEdge.class)) {
-            idx.insert(se.getGeometry().getEnvelopeInternal(), se);
+            for (StreetEdge se : Iterables.filter(graph.getEdges(), StreetEdge.class)) {
+                idx.insert(se.getGeometry().getEnvelopeInternal(), se);
+            }
+        } else {
+            idx = hashGridSpatialIndex;
         }
+
+    }
+
+    /**
+     * Construct a new SimpleStreetSplitter. Be aware that only one SimpleStreetSplitter should be
+     * active on a graph at any given time.
+     *
+     * SimpleStreetSplitter generates index on graph
+     * @param graph
+     */
+    public SimpleStreetSplitter(Graph graph) {
+        this(graph, null);
     }
 
     /** Link all relevant vertices to the street network */
@@ -101,8 +120,13 @@ public class SimpleStreetSplitter {
         }
     }
 
-    /** Link this vertex into the graph */
+    /** Link this vertex into the graph to the closest walkable edge */
     public boolean link (Vertex vertex) {
+        return link(vertex, TraverseMode.WALK);
+    }
+
+    /** Link this vertex into the graph */
+    public boolean link(Vertex vertex, TraverseMode traverseMode) {
         // find nearby street edges
         // TODO: we used to use an expanding-envelope search, which is more efficient in
         // dense areas. but first let's see how inefficient this is. I suspect it's not too
@@ -118,24 +142,25 @@ public class SimpleStreetSplitter {
 
         double duplicateDeg = SphericalDistanceLibrary.metersToDegrees(DUPLICATE_WAY_EPSILON_METERS);
 
+        final TraverseModeSet traverseModeSet;
+        if (traverseMode == TraverseMode.BICYCLE) {
+            traverseModeSet = new TraverseModeSet(traverseMode, TraverseMode.WALK);
+        } else {
+            traverseModeSet = new TraverseModeSet(traverseMode);
+        }
         // We sort the list of candidate edges by distance to the stop
         // This should remove any issues with things coming out of the spatial index in different orders
         // Then we link to everything that is within DUPLICATE_WAY_EPSILON_METERS of of the best distance
         // so that we capture back edges and duplicate ways.
-        // TODO all the code below looks like a good candidate for Java 8 streams and lambdas
-        List<StreetEdge> candidateEdges = new ArrayList<StreetEdge>(
-                Collections2.filter(idx.query(env), new Predicate<StreetEdge>() {
-
-                    @Override
-                    public boolean apply(StreetEdge edge) {
-                        // note: not filtering by radius here as distance calculation is expensive
-                        // we do that below.
-                        return edge.canTraverse(new TraverseModeSet(TraverseMode.WALK)) &&
-                                // only link to edges still in the graph.
-                                edge.getToVertex().getIncoming().contains(edge);
-                    }
-                })
-                );
+        List<StreetEdge> candidateEdges = idx.query(env).stream()
+            .filter(streetEdge -> streetEdge instanceof  StreetEdge)
+            .map(edge -> (StreetEdge) edge)
+            // note: not filtering by radius here as distance calculation is expensive
+            // we do that below.
+            .filter(edge -> edge.canTraverse(traverseModeSet) &&
+                // only link to edges still in the graph.
+                edge.getToVertex().getIncoming().contains(edge))
+            .collect(Collectors.toList());
 
         // make a map of distances
         final TIntDoubleMap distances = new TIntDoubleHashMap();
@@ -209,43 +234,81 @@ public class SimpleStreetSplitter {
             makeLinkEdges(tstop, (StreetVertex) edge.getToVertex());
         }
 
-        else {	
+        else {
+
+            TemporaryVertex temporaryVertex = null;
+            boolean endVertex = false;
+            if (tstop instanceof TemporaryVertex) {
+                temporaryVertex = (TemporaryVertex) tstop;
+                endVertex = temporaryVertex.isEndVertex();
+
+            }
             // split the edge, get the split vertex
-            SplitterVertex v0 = split(edge, ll);
+            SplitterVertex v0 = split(edge, ll, temporaryVertex != null, endVertex);
             makeLinkEdges(tstop, v0);
         }
     }
 
-    /** Split the street edge at the given fraction */
-    private SplitterVertex split (StreetEdge edge, LinearLocation ll) {
+
+    /**
+     * Split the street edge at the given fraction
+     *
+     * @param edge to be split
+     * @param ll fraction at which to split the edge
+     * @param temporarySplit if true this is temporary split at origin/destinations search and only temporary edges vertices are created
+     * @param endVertex if this is temporary edge this is true if this is end vertex otherwise it doesn't matter
+     * @return Splitter vertex with added new edges
+     */
+    private SplitterVertex split (StreetEdge edge, LinearLocation ll, boolean temporarySplit, boolean endVertex) {
         LineString geometry = edge.getGeometry();
 
         // create the geometries
         Coordinate splitPoint = ll.getCoordinate(geometry);
 
         // every edge can be split exactly once, so this is a valid label
-        SplitterVertex v = new SplitterVertex(graph, "split from " + edge.getId(), splitPoint.x, splitPoint.y, edge);
+        SplitterVertex v;
+        if (temporarySplit) {
+            v = new TemporarySplitterVertex(graph, "split from " + edge.getId(), splitPoint.x, splitPoint.y,
+                edge, endVertex);
+            if (edge.isWheelchairAccessible()) {
+                ((TemporarySplitterVertex) v).setWheelchairAccessible(true);
+            } else {
+                ((TemporarySplitterVertex) v).setWheelchairAccessible(false);
+            }
+        } else {
+            v = new SplitterVertex(graph, "split from " + edge.getId(), splitPoint.x, splitPoint.y,
+                edge);
+        }
 
         // make the edges
         // TODO this is using the StreetEdge implementation of split, which will discard elevation information
         // on edges that have it
-        P2<StreetEdge> edges = edge.split(v);
+        P2<StreetEdge> edges = edge.split(v, !temporarySplit);
 
-        // update indices
-        idx.insert(edges.first.getGeometry().getEnvelopeInternal(), edges.first);
-        idx.insert(edges.second.getGeometry().getEnvelopeInternal(), edges.second);
+        //this functions are created so they can be overridden in OriginDestinationLinker where they should do nothing.
+        updateIndex(edges);
 
-        // (no need to remove original edge, we filter it when it comes out of the index)
-
-        // remove original edge
-        edge.getToVertex().removeIncoming(edge);
-        edge.getFromVertex().removeOutgoing(edge);
+        removeOriginalEdge(edge);
 
         return v;
     }
 
+    protected void removeOriginalEdge(StreetEdge edge) {
+        // remove original edge from the graph
+        edge.getToVertex().removeIncoming(edge);
+        edge.getFromVertex().removeOutgoing(edge);
+    }
+
+    protected void updateIndex(P2<StreetEdge> edges) {
+        // update indices of new edges
+        idx.insert(edges.first.getGeometry().getEnvelopeInternal(), edges.first);
+        idx.insert(edges.second.getGeometry().getEnvelopeInternal(), edges.second);
+
+        // (no need to remove original edge, we filter it when it comes out of the index)
+    }
+
     /** Make the appropriate type of link edges from a vertex */
-    private void makeLinkEdges (Vertex from, StreetVertex to) {
+    protected void makeLinkEdges (Vertex from, StreetVertex to) {
         if  (from instanceof TransitStop)
             makeTransitLinkEdges((TransitStop) from, to);
         else if (from instanceof BikeRentalStationVertex)

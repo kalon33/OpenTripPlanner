@@ -17,6 +17,7 @@ import org.opentripplanner.common.model.P2;
 import org.opentripplanner.graph_builder.annotation.BikeParkUnlinked;
 import org.opentripplanner.graph_builder.annotation.BikeRentalStationUnlinked;
 import org.opentripplanner.graph_builder.annotation.StopUnlinked;
+import org.opentripplanner.routing.core.RoutingRequest;
 import org.opentripplanner.routing.core.TraverseMode;
 import org.opentripplanner.routing.core.TraverseModeSet;
 import org.opentripplanner.routing.edgetype.StreetBikeParkLink;
@@ -86,7 +87,7 @@ public class SimpleStreetSplitter {
             idx = new HashGridSpatialIndex<Edge>();
 
             for (StreetEdge se : Iterables.filter(graph.getEdges(), StreetEdge.class)) {
-                idx.insert(se.getGeometry().getEnvelopeInternal(), se);
+                idx.insert(se.getGeometry(), se);
             }
         } else {
             idx = hashGridSpatialIndex;
@@ -122,11 +123,11 @@ public class SimpleStreetSplitter {
 
     /** Link this vertex into the graph to the closest walkable edge */
     public boolean link (Vertex vertex) {
-        return link(vertex, TraverseMode.WALK);
+        return link(vertex, TraverseMode.WALK, null);
     }
 
     /** Link this vertex into the graph */
-    public boolean link(Vertex vertex, TraverseMode traverseMode) {
+    public boolean link(Vertex vertex, TraverseMode traverseMode, RoutingRequest options) {
         // find nearby street edges
         // TODO: we used to use an expanding-envelope search, which is more efficient in
         // dense areas. but first let's see how inefficient this is. I suspect it's not too
@@ -202,14 +203,14 @@ public class SimpleStreetSplitter {
                 distances.get(candidateEdges.get(i).getId()) - distances.get(candidateEdges.get(i - 1).getId()) < duplicateDeg);
 
         for (StreetEdge edge : bestEdges) {
-            link(vertex, edge, xscale);
+            link(vertex, edge, xscale, options);
         }
 
         return true;
     }
 
     /** split the edge and link in the transit stop */
-    private void link (Vertex tstop, StreetEdge edge, double xscale) {
+    private void link(Vertex tstop, StreetEdge edge, double xscale, RoutingRequest options) {
         // TODO: we've already built this line string, we should save it
         LineString orig = edge.getGeometry();
         LineString transformed = equirectangularProject(orig, xscale);
@@ -242,6 +243,11 @@ public class SimpleStreetSplitter {
                 temporaryVertex = (TemporaryVertex) tstop;
                 endVertex = temporaryVertex.isEndVertex();
 
+            }
+            //This throws runtime TrivialPathException if same edge is split in origin and destination link
+            //It is only used in origin/destination linking since otherwise options is null
+            if (options != null) {
+                options.canSplitEdge(edge);
             }
             // split the edge, get the split vertex
             SplitterVertex v0 = split(edge, ll, temporaryVertex != null, endVertex);
@@ -301,8 +307,8 @@ public class SimpleStreetSplitter {
 
     protected void updateIndex(P2<StreetEdge> edges) {
         // update indices of new edges
-        idx.insert(edges.first.getGeometry().getEnvelopeInternal(), edges.first);
-        idx.insert(edges.second.getGeometry().getEnvelopeInternal(), edges.second);
+        idx.insert(edges.first.getGeometry(), edges.first);
+        idx.insert(edges.second.getGeometry(), edges.second);
 
         // (no need to remove original edge, we filter it when it comes out of the index)
     }

@@ -11,19 +11,12 @@
  You should have received a copy of the GNU General Public License
  along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 
-package org.opentripplanner.api.model.transit;
+package org.opentripplanner.routing.algorithm;
 
-import java.util.List;
+import org.opentripplanner.routing.core.State;
+import org.opentripplanner.routing.graph.Edge;
 
-import javax.xml.bind.annotation.XmlElement;
+public interface ExtendedTraverseVisitor extends TraverseVisitor {
 
-import org.onebusaway.gtfs.model.ServiceCalendar;
-import org.onebusaway.gtfs.model.ServiceCalendarDate;
-
-public class ServiceCalendarData {
-    @XmlElement
-    public List<ServiceCalendar> calendars;
-
-    @XmlElement
-    public List<ServiceCalendarDate> calendarDates;
+    void preVisitEdge(Edge edge, State previousState);
 }

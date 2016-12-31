@@ -89,8 +89,17 @@ public class RoutingRequest implements Cloneable, Serializable {
     /** An ordered list of intermediate locations to be visited. */
     public List<GenericLocation> intermediatePlaces;
 
-    /** The maximum distance (in meters) the user is willing to walk. Defaults to unlimited. */
+    /**
+     * The maximum distance (in meters) the user is willing to walk for access/egress legs.
+     * Defaults to unlimited.
+     */
     public double maxWalkDistance = Double.MAX_VALUE;
+
+    /**
+     * The maximum distance (in meters) the user is willing to walk for transfer legs.
+     * Defaults to unlimited. Currently set to be the same value as maxWalkDistance.
+     */
+    public double maxTransferWalkDistance = Double.MAX_VALUE;
 
     /**
      * The maximum time (in seconds) of pre-transit travel when using drive-to-transit (park and
@@ -104,6 +113,9 @@ public class RoutingRequest implements Cloneable, Serializable {
 
     /** The worst possible weight that we will accept when planning a trip. */
     public double maxWeight = Double.MAX_VALUE;
+
+    /** The maximum duration of a returned itinerary, in hours. */
+    public double maxHours = Double.MAX_VALUE;
 
     /** The set of TraverseModes that a user is willing to use. Defaults to WALK | TRANSIT. */
     public TraverseModeSet modes = new TraverseModeSet("TRANSIT,WALK"); // defaults in constructor overwrite this
@@ -422,6 +434,9 @@ public class RoutingRequest implements Cloneable, Serializable {
 
     /** Accept only paths that use transit (no street-only paths). */
     public boolean onlyTransitTrips = false;
+
+    /** Option to disable the default filtering of GTFS-RT alerts by time. */
+    public boolean disableAlertFiltering = false;
 
     /** Saves split edge which can be split on origin/destination search
      *
@@ -901,6 +916,7 @@ public class RoutingRequest implements Cloneable, Serializable {
                 && wheelchairAccessible == other.wheelchairAccessible
                 && optimize.equals(other.optimize)
                 && maxWalkDistance == other.maxWalkDistance
+                && maxTransferWalkDistance == other.maxTransferWalkDistance
                 && maxPreTransitTime == other.maxPreTransitTime
                 && transferPenalty == other.transferPenalty
                 && maxSlope == other.maxSlope
@@ -940,7 +956,8 @@ public class RoutingRequest implements Cloneable, Serializable {
                 && ignoreRealtimeUpdates == other.ignoreRealtimeUpdates
                 && disableRemainingWeightHeuristic == other.disableRemainingWeightHeuristic
                 && Objects.equal(startingTransitTripId, other.startingTransitTripId)
-                && useTraffic == other.useTraffic;
+                && useTraffic == other.useTraffic
+                && disableAlertFiltering == other.disableAlertFiltering;
     }
 
     /**
@@ -954,6 +971,7 @@ public class RoutingRequest implements Cloneable, Serializable {
                 + (int) (worstTime & 0xffffffff) + modes.hashCode()
                 + (arriveBy ? 8966786 : 0) + (wheelchairAccessible ? 731980 : 0)
                 + optimize.hashCode() + new Double(maxWalkDistance).hashCode()
+                + new Double(maxTransferWalkDistance).hashCode()
                 + new Double(transferPenalty).hashCode() + new Double(maxSlope).hashCode()
                 + new Double(walkReluctance).hashCode() + new Double(waitReluctance).hashCode()
                 + new Double(waitAtBeginningFactor).hashCode() * 15485863

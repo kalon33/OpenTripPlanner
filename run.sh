@@ -42,4 +42,4 @@ fi
 process $ROUTER_NAME
 
 echo "graphString is: $ROUTER_NAME"
-java $JAVA_OPTS -Duser.timezone=Europe/Helsinki -jar $JAR --server --port $PORT --securePort $SECURE_PORT --basePath ./ --graphs ./graphs --router $ROUTER_NAME
+java $JAVA_OPTS -Duser.timezone=Europe/Paris -jar $JAR --server --port $PORT --securePort $SECURE_PORT --basePath ./ --graphs ./graphs --router $ROUTER_NAME

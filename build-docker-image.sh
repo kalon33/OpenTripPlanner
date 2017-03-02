@@ -1,6 +1,6 @@
 #!/bin/bash
-ORG=hsldevcom
-DOCKER_IMAGE=opentripplanner
+ORG=kalon33
+DOCKER_IMAGE=otp_paris
 
 # Set these environment variables
 #DOCKER_TAG=

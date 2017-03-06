@@ -13,50 +13,45 @@
 
 package org.opentripplanner.updater.alerts;
 
-import java.io.InputStream;
-
 import com.fasterxml.jackson.databind.JsonNode;
 import org.opentripplanner.routing.graph.Graph;
 import org.opentripplanner.routing.impl.AlertPatchServiceImpl;
 import org.opentripplanner.routing.services.AlertPatchService;
 import org.opentripplanner.updater.*;
 import org.opentripplanner.util.HttpUtils;
+import org.rutebanken.siri20.util.SiriXml;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import uk.org.siri.siri20.*;
 
-import com.google.transit.realtime.GtfsRealtime.FeedMessage;
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import java.io.InputStream;
+import java.time.ZonedDateTime;
+import java.util.UUID;
 
-/**
- * GTFS-RT alerts updater
- *
- * Usage example ('myalert' name is an example) in file 'Graph.properties':
- *
- * <pre>
- * myalert.type = real-time-alerts
- * myalert.frequencySec = 60
- * myalert.url = http://host.tld/path
- * myalert.earlyStartSec = 3600
- * myalert.feedId = TA
- * </pre>
- */
-public class GtfsRealtimeAlertsUpdater extends PollingGraphUpdater {
-    private static final Logger LOG = LoggerFactory.getLogger(GtfsRealtimeAlertsUpdater.class);
+public class SiriSXUpdater extends PollingGraphUpdater {
+    private static final Logger LOG = LoggerFactory.getLogger(SiriSXUpdater.class);
 
     private GraphUpdaterManager updaterManager;
 
-    private Long lastTimestamp = Long.MIN_VALUE;
+    private ZonedDateTime lastTimestamp = ZonedDateTime.now().minusWeeks(1);
 
     private String url;
 
     private String feedId;
 
-    private GtfsRealtimeFuzzyTripMatcher fuzzyTripMatcher;
+    private SiriFuzzyTripMatcher fuzzyTripMatcher;
 
     private AlertPatchService alertPatchService;
 
     private long earlyStart;
 
     private AlertsUpdateHandler updateHandler = null;
+
+    private String requestorRef;
+
+    private int timeout;
 
     @Override
     public void setGraphUpdaterManager(GraphUpdaterManager updaterManager) {
@@ -72,13 +67,25 @@ public class GtfsRealtimeAlertsUpdater extends PollingGraphUpdater {
         if (url == null) {
             throw new IllegalArgumentException("Missing mandatory 'url' parameter");
         }
-        this.url = url;
+
+        this.requestorRef = config.path("requestorRef").asText();
+        if (requestorRef == null || requestorRef.isEmpty()) {
+            requestorRef = UUID.randomUUID().toString();
+        }
+
+        this.url = url;// + uniquenessParameter;
         this.earlyStart = config.path("earlyStartSec").asInt(0);
         this.feedId = config.path("feedId").asText();
-        if (config.path("fuzzyTripMatching").asBoolean(false)) {
-            this.fuzzyTripMatcher = new GtfsRealtimeFuzzyTripMatcher(graph.index);
+
+
+        int timeoutSec = config.path("timeoutSec").asInt();
+        if (timeoutSec > 0) {
+            this.timeout = 1000*timeoutSec;
         }
-        LOG.info("Creating real-time alert updater running every {} seconds : {}", frequencySec, url);
+
+        this.fuzzyTripMatcher = new SiriFuzzyTripMatcher(graph.index);
+
+        LOG.info("Creating real-time alert updater (SIRI SX) running every {} seconds : {}", frequencySec, url);
     }
 
     @Override
@@ -89,21 +96,37 @@ public class GtfsRealtimeAlertsUpdater extends PollingGraphUpdater {
         updateHandler.setEarlyStart(earlyStart);
         updateHandler.setFeedId(feedId);
         updateHandler.setAlertPatchService(alertPatchService);
-        updateHandler.setFuzzyTripMatcher(fuzzyTripMatcher);
+        updateHandler.setSiriFuzzyTripMatcher(fuzzyTripMatcher);
+
+        try {
+            jaxbContext = JAXBContext.newInstance(Siri.class);
+        } catch (JAXBException e) {
+
+        }
     }
+
+    JAXBContext jaxbContext;
 
     @Override
     protected void runPolling() {
+        long t1 = System.currentTimeMillis();
         try {
-            InputStream data = HttpUtils.getData(url);
-            if (data == null) {
+
+            InputStream is = HttpUtils.postData(url, SiriHelper.createSXServiceRequestAsXml(requestorRef), timeout);
+
+            Siri siri = (Siri)jaxbContext.createUnmarshaller().unmarshal(is);
+
+            LOG.info("Fetching SX-data took {} ms", (System.currentTimeMillis()-t1));
+            if (siri == null) {
                 throw new RuntimeException("Failed to get data from url " + url);
             }
+            ServiceDelivery serviceDelivery = siri.getServiceDelivery();
+            if (serviceDelivery == null) {
+                throw new RuntimeException("Failed to get serviceDelivery " + url);
+            }
 
-            final FeedMessage feed = FeedMessage.PARSER.parseFrom(data);
-
-            long feedTimestamp = feed.getHeader().getTimestamp();
-            if (feedTimestamp <= lastTimestamp) {
+            ZonedDateTime responseTimestamp = serviceDelivery.getResponseTimestamp();
+            if (responseTimestamp.isBefore(lastTimestamp)) {
                 LOG.info("Ignoring feed with an old timestamp.");
                 return;
             }
@@ -112,13 +135,14 @@ public class GtfsRealtimeAlertsUpdater extends PollingGraphUpdater {
             updaterManager.execute(new GraphWriterRunnable() {
                 @Override
                 public void run(Graph graph) {
-                    updateHandler.update(feed);
+                    updateHandler.update(serviceDelivery);
                 }
             });
 
-            lastTimestamp = feedTimestamp;
+            lastTimestamp = responseTimestamp;
         } catch (Exception e) {
-            LOG.error("Error reading gtfs-realtime feed from " + url, e);
+            LOG.info("Failed after {} ms", (System.currentTimeMillis()-t1));
+            LOG.error("Error reading SIRI feed from " + url, e);
         }
     }
 
@@ -131,6 +155,6 @@ public class GtfsRealtimeAlertsUpdater extends PollingGraphUpdater {
     }
 
     public String toString() {
-        return "GtfsRealtimeUpdater(" + url + ")";
+        return "SiriSXUpdater (" + url + ")";
     }
 }

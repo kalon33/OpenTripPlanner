@@ -8,7 +8,7 @@ ENV ROUTER_DATA_CONTAINER_URL="http://opentripplanner-data-container:8080"
 WORKDIR ${OTP_ROOT}
 
 # Fetch maven dependencies
-RUN mkdir -p ${OTP_ROOT}/graphs/paris
+RUN mkdir -p ${OTP_ROOT}/graphs/hsl
 
 ADD pom.xml ${OTP_ROOT}/pom.xml
 RUN mvn dependency:resolve
@@ -22,15 +22,15 @@ RUN mvn package \
 ADD run.sh ${OTP_ROOT}/run.sh
 
 RUN chown -R 9999:9999 ${OTP_ROOT}
-#USER 9999
+USER 9999
 
 ENV PORT=8080
 EXPOSE ${PORT}
 ENV SECURE_PORT=8081
 EXPOSE ${SECURE_PORT}
-ENV ROUTER_NAME=paris
-ENV JAVA_OPTS="-Xms6G -Xmx6G"
+ENV ROUTER_NAME=finland
+ENV JAVA_OPTS="-Xms8G -Xmx8G"
 
 LABEL io.openshift.expose-services 8080:http
 
-ENTRYPOINT exec ./run.sh
+CMD ./run.sh

@@ -1,8 +1,5 @@
 #!/bin/bash
 
-# Fail fast if graph building fails
-set -e
-
 JAR=`ls target/*-shaded*`
 echo JAR=$JAR
 SLEEP_TIME=5
@@ -33,13 +30,7 @@ function process {
   build_graph $NAME $FILE
 }
 
-#workaround for azure DNS issue
-
-if [ "$EUID" -eq 0 ]
-  then echo "search marathon.l4lb.thisdcos.directory" >> /etc/resolv.conf
-fi
-
 process $ROUTER_NAME
 
 echo "graphString is: $ROUTER_NAME"
-java $JAVA_OPTS -Duser.timezone=Europe/Paris -jar $JAR --server --port $PORT --securePort $SECURE_PORT --basePath ./ --graphs ./graphs --router $ROUTER_NAME
+java $JAVA_OPTS -Duser.timezone=Europe/Helsinki -jar $JAR --server --port $PORT --securePort $SECURE_PORT --basePath ./ --graphs ./graphs --router $ROUTER_NAME

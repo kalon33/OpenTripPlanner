@@ -68,8 +68,11 @@ public class DefaultWayPropertySetSource implements WayPropertySetSource {
         setProperties(props, "highway=raceway", StreetTraversalPermission.NONE);
         setProperties(props, "highway=construction", StreetTraversalPermission.NONE);
         setProperties(props, "highway=service;access=private", StreetTraversalPermission.NONE);
+        setProperties(props, "highway=trail", StreetTraversalPermission.NONE);
+        setProperties(props, "highway=*;informal=yes", StreetTraversalPermission.NONE);
 
         /* PEDESTRIAN */
+        setProperties(props, "highway=corridor", StreetTraversalPermission.PEDESTRIAN);
         setProperties(props, "highway=steps", StreetTraversalPermission.PEDESTRIAN);
         setProperties(props, "highway=crossing", StreetTraversalPermission.PEDESTRIAN);
         setProperties(props, "highway=platform", StreetTraversalPermission.PEDESTRIAN);
@@ -342,7 +345,7 @@ public class DefaultWayPropertySetSource implements WayPropertySetSource {
 
         /* bicycle=designated, but no bike infrastructure is present */
         setProperties(props, "highway=*;bicycle=designated",
-                StreetTraversalPermission.PEDESTRIAN_AND_BICYCLE, 0.97, 0.97);
+                StreetTraversalPermission.ALL, 0.97, 0.97);
         setProperties(props, "highway=service;bicycle=designated", StreetTraversalPermission.ALL,
                 0.84, 0.84);
         setProperties(props, "highway=residential;bicycle=designated",

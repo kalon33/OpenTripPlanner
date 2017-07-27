@@ -10,10 +10,6 @@ function build_graph {
   echo "building graph..."
   DIR="graphs/$NAME"
   mkdir -p $DIR
-<<<<<<< HEAD
-  unzip -o -j -d $DIR $FILE
-  java $JAVA_OPTS -jar $JAR --build $DIR
-=======
   unzip -o -d $DIR $FILE
   mv $DIR/router-$GRAPHNAME $DIR/$GRAPHNAME
   java $JAVA_OPTS -jar $JAR --build $DIR/$GRAPHNAME
@@ -52,7 +48,6 @@ function download_graph {
 
 function version {
   java -jar $JAR --version|grep commit|cut -d' ' -f2
->>>>>>> hsldevcom/master
 }
 
 function process {

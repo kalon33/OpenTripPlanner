@@ -1,9 +1,12 @@
-FROM maven:3-jdk-8
+FROM openjdk:8u121-jre-alpine
 MAINTAINER Reittiopas version: 0.1
-RUN apt-get update && apt-get -y install curl
+
+RUN apk add --update curl bash ttf-dejavu && \
+    rm -rf /var/cache/apk/*
+VOLUME /opt/opentripplanner/graphs
 
 ENV OTP_ROOT="/opt/opentripplanner"
-ENV ROUTER_DATA_CONTAINER_URL="http://opentripplanner-data-container:8080"
+ENV ROUTER_DATA_CONTAINER_URL="https://api.digitransit.fi/routing-data/v2/finland"
 
 WORKDIR ${OTP_ROOT}
 

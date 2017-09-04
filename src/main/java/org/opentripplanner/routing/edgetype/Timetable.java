@@ -29,6 +29,7 @@ import org.opentripplanner.routing.core.State;
 import org.opentripplanner.routing.core.StopTransfer;
 import org.opentripplanner.routing.core.TransferTable;
 import org.opentripplanner.routing.graph.Graph;
+import org.opentripplanner.routing.graph.GraphIndex;
 import org.opentripplanner.routing.trippattern.FrequencyEntry;
 import org.opentripplanner.routing.trippattern.RealTimeState;
 import org.opentripplanner.routing.trippattern.TripTimes;
@@ -40,6 +41,9 @@ import java.io.Serializable;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
+
+import static org.opentripplanner.model.StopPattern.PICKDROP_NONE;
+import static org.opentripplanner.model.StopPattern.PICKDROP_SCHEDULED;
 
 
 /**
@@ -566,17 +570,39 @@ public class Timetable implements Serializable {
 
         List<EstimatedCall> estimatedCalls = journeyCalls.getEstimatedCalls();
 
-        //Get all scheduled stops
-        List<Stop> stops = pattern.getStops();
+        boolean stopPatternChanged = false;
+
+        //Get all scheduled stops with dropoff or pickup
+        List<Stop> stops = new ArrayList<>();
+        Stop[] allStops = pattern.stopPattern.stops;
+        for (int i = 0; i < allStops.length; i++) {
+            if (pattern.stopPattern.dropoffs[i] != PICKDROP_NONE &
+                    pattern.stopPattern.pickups[i] != PICKDROP_NONE) {
+                stops.add(allStops[i]);
+            } else {
+                stopPatternChanged = true;
+            }
+        }
 
         List<Stop> modifiedStops = new ArrayList<>();
-        boolean stopPatternChanged = false;
         for (Stop stop : stops) {
             boolean foundMatch = false;
-            String id = stop.getId().getId();
+
             for (EstimatedCall estimatedCall : estimatedCalls) {
 
-                if (id.equals(estimatedCall.getStopPointRef().getValue())) {
+                //Current stop is being updated
+                boolean stopsMatchById = stop.getId().getId().equals(estimatedCall.getStopPointRef().getValue());
+
+                if (!stopsMatchById && stop.getParentStation() != null) {
+                    Stop alternativeStop = graph.index.stopForId.get(new AgencyAndId(stop.getId().getAgencyId(), estimatedCall.getStopPointRef().getValue()));
+                    if (alternativeStop != null && stop.getParentStation().equals(alternativeStop.getParentStation())) {
+                        stopsMatchById = true;
+                        stopPatternChanged = true;
+                        stop = alternativeStop;
+                    }
+                }
+
+                if (stopsMatchById) {
                     foundMatch = true;
                     boolean isCancelled = estimatedCall.isCancellation() != null && estimatedCall.isCancellation();
 
@@ -589,14 +615,14 @@ public class Timetable implements Serializable {
                 }
             }
             if (!foundMatch) {
-                //Current stop is not included in SIRI ET-data - keep existing
-                modifiedStops.add(stop);
+
+                stopPatternChanged = true;
             }
         }
 
         Trip trip = getTrip(tripId);
 
-        List<StopTime> modifiedStopTimes = createModifiedStopTimes(oldTimes, journey, trip);
+        List<StopTime> modifiedStopTimes = createModifiedStopTimes(oldTimes, journey, trip, graph.index);
         TripTimes newTimes = new TripTimes(trip, modifiedStopTimes, graph.deduplicator);
 
         //Populate missing data from existing TripTimes
@@ -606,10 +632,20 @@ public class Timetable implements Serializable {
         ZonedDateTime departureDate = null;
         for (Stop stop : modifiedStops) {
 
-            String id = stop.getId().getId();
+
             for (EstimatedCall estimatedCall : estimatedCalls) {
+
                 //Current stop is being updated
-                if (id.equals(estimatedCall.getStopPointRef().getValue())) {
+                boolean stopsMatchById = stop.getId().getId().equals(estimatedCall.getStopPointRef().getValue());
+
+                if (!stopsMatchById && stop.getParentStation() != null) {
+                    Stop alternativeStop = graph.index.stopForId.get(new AgencyAndId(stop.getId().getAgencyId(), estimatedCall.getStopPointRef().getValue()));
+                    if (alternativeStop != null && stop.getParentStation().equals(alternativeStop.getParentStation())) {
+                        stopsMatchById = true;
+                    }
+                }
+
+                if (stopsMatchById) {
                     if (departureDate == null) {
                         departureDate = estimatedCall.getAimedDepartureTime();
                         if (departureDate == null) {
@@ -665,11 +701,12 @@ public class Timetable implements Serializable {
      * Calculate new stoppattern based on single stop cancellations
      *
      * @param journey SIRI-ET EstimatedVehicleJourney
+     * @param graphIndex
      * @return new copy of updated TripTimes after TripUpdate has been applied on TripTimes of trip
      *         with the id specified in the trip descriptor of the TripUpdate; null if something
      *         went wrong
      */
-    public List<Stop> createModifiedStops(EstimatedVehicleJourney journey) {
+    public List<Stop> createModifiedStops(EstimatedVehicleJourney journey, GraphIndex graphIndex) {
         if (journey == null) {
             LOG.error("A null EstimatedVehicleJourney pointer was passed to the Timetable class update method.");
             return null;
@@ -686,7 +723,7 @@ public class Timetable implements Serializable {
         List<EstimatedCall> estimatedCalls = journeyCalls.getEstimatedCalls();
 
         //Get all scheduled stops
-        List<Stop> stops = pattern.getStops();
+        List<Stop> stops = getScheduledStops();
 
         List<Stop> modifiedStops = new ArrayList<>();
 
@@ -698,12 +735,16 @@ public class Timetable implements Serializable {
                 //Current stop is being updated
                 if (id.equals(estimatedCall.getStopPointRef().getValue())) {
                     foundMatch = true;
-                    if (estimatedCall.isCancellation() == null  ||
-                            (estimatedCall.isCancellation() != null && !estimatedCall.isCancellation())) {
-                        //Cancellation is not set, or is set to 'false'
-                        modifiedStops.add(stop);
-                    }
+                    modifiedStops.add(stop);
                     break;
+                } else if (stop.getParentStation() != null) {
+                    Stop alternativeStop = graphIndex.stopForId.get(new AgencyAndId(stop.getId().getAgencyId(), estimatedCall.getStopPointRef().getValue()));
+                    if (alternativeStop != null && stop.getParentStation().equals(alternativeStop.getParentStation())) {
+                        foundMatch = true;
+                        modifiedStops.add(alternativeStop);
+                        break;
+                    }
+
                 }
             }
             if (!foundMatch) {
@@ -712,6 +753,19 @@ public class Timetable implements Serializable {
         }
         return modifiedStops;
     }
+
+    private List<Stop> getScheduledStops() {
+        List<Stop> stops = new ArrayList<>();
+
+        for (int i = 0; i < pattern.stopPattern.stops.length; i++) {
+            if (pattern.stopPattern.dropoffs[i] != PICKDROP_NONE |
+                    pattern.stopPattern.pickups[i] != PICKDROP_NONE) {
+                stops.add(pattern.stopPattern.stops[i]);
+            }
+        }
+        return stops;
+    }
+
     /**
      * Apply the SIRI ET to the appropriate TripTimes from this Timetable.
      * Calculate new stoppattern based on single stop cancellations
@@ -720,11 +774,12 @@ public class Timetable implements Serializable {
      * @param oldTimes
      * @param journey SIRI-ET EstimatedVehicleJourney
      * @param trip
+     * @param graphIndex
      * @return new copy of updated TripTimes after TripUpdate has been applied on TripTimes of trip
      *         with the id specified in the trip descriptor of the TripUpdate; null if something
      *         went wrong
      */
-    public List<StopTime> createModifiedStopTimes(TripTimes oldTimes, EstimatedVehicleJourney journey, Trip trip) {
+    public List<StopTime> createModifiedStopTimes(TripTimes oldTimes, EstimatedVehicleJourney journey, Trip trip, GraphIndex graphIndex) {
         if (journey == null) {
             LOG.error("A null EstimatedVehicleJourney pointer was passed to the Timetable class update method.");
             return null;
@@ -740,15 +795,29 @@ public class Timetable implements Serializable {
         List<EstimatedCall> estimatedCalls = journeyCalls.getEstimatedCalls();
 
         //Get all scheduled stops
-        List<Stop> stops = pattern.getStops();
+        List<Stop> stops = getScheduledStops();
 
         List<StopTime> modifiedStops = new ArrayList<>();
 
         ZonedDateTime departureDate = null;
-        int counter = 0;
-        for (Stop stop : stops) {
+        int counter = (journey.getRecordedCalls() != null && journey.getRecordedCalls().getRecordedCalls() != null) ? journey.getRecordedCalls().getRecordedCalls().size():0;
 
-            String id = stop.getId().getId();
+        // Keep existing stop-times as-is
+        for (int i = 0; i < counter; i++) {
+            Stop stop = stops.get(i);
+
+            StopTime stopTime = new StopTime();
+            stopTime.setStop(stop);
+            stopTime.setTrip(trip);
+            stopTime.setStopSequence(i);
+
+            stopTime.setArrivalTime(oldTimes.getArrivalTime(i));
+            stopTime.setDepartureTime(oldTimes.getDepartureTime(i));
+            modifiedStops.add(stopTime);
+        }
+        // modify updated stop-times
+        for (; counter < stops.size(); counter++) {
+            Stop stop = stops.get(counter);
 
             final StopTime stopTime = new StopTime();
             stopTime.setStop(stop);
@@ -759,11 +828,22 @@ public class Timetable implements Serializable {
             for (EstimatedCall estimatedCall : estimatedCalls) {
 
                 if (departureDate == null) {
-                    departureDate = estimatedCall.getAimedDepartureTime();
+                    departureDate = (estimatedCall.getAimedDepartureTime() != null ? estimatedCall.getAimedDepartureTime():estimatedCall.getAimedArrivalTime());
                 }
 
                 //Current stop is being updated
-                if (id.equals(estimatedCall.getStopPointRef().getValue())) {
+                boolean stopsMatchById = stop.getId().getId().equals(estimatedCall.getStopPointRef().getValue());
+
+                if (!stopsMatchById && stop.getParentStation() != null) {
+                    Stop alternativeStop = graphIndex.stopForId.get(new AgencyAndId(stop.getId().getAgencyId(), estimatedCall.getStopPointRef().getValue()));
+                    if (alternativeStop != null && stop.getParentStation().equals(alternativeStop.getParentStation())) {
+                        stopsMatchById = true;
+                        stopTime.setStop(alternativeStop);
+                    }
+
+                }
+
+                if (stopsMatchById) {
                     foundMatch = true;
                     if (estimatedCall.getAimedArrivalTime() != null) {
                         stopTime.setArrivalTime(calculateSecondsSinceMidnight(departureDate, estimatedCall.getAimedArrivalTime()));
@@ -776,20 +856,29 @@ public class Timetable implements Serializable {
                         stopTime.setDepartureTime(calculateSecondsSinceMidnight(departureDate, estimatedCall.getExpectedDepartureTime()));
                     }
                     if (estimatedCall.isCancellation() != null && estimatedCall.isCancellation()) {
-                        stopTime.setDropOffType(1);
-                        stopTime.setPickupType(1);
+                        stopTime.setDropOffType(PICKDROP_NONE);
+                        stopTime.setPickupType(PICKDROP_NONE);
                     } else {
-                        stopTime.setDropOffType(0);
-                        stopTime.setPickupType(0);
+
+                        if (estimatedCall.getArrivalBoardingActivity() != null) {
+                            if (estimatedCall.getArrivalBoardingActivity() == ArrivalBoardingActivityEnumeration.ALIGHTING) {
+                                stopTime.setPickupType(PICKDROP_SCHEDULED);
+                            } else if (estimatedCall.getArrivalBoardingActivity() == ArrivalBoardingActivityEnumeration.NO_ALIGHTING) {
+                                stopTime.setPickupType(PICKDROP_NONE);
+                            }
+                        }
+                        if (estimatedCall.getDepartureBoardingActivity() != null) {
+                            if (estimatedCall.getDepartureBoardingActivity() == DepartureBoardingActivityEnumeration.BOARDING) {
+                                stopTime.setDropOffType(PICKDROP_SCHEDULED);
+                            } else if (estimatedCall.getDepartureBoardingActivity() == DepartureBoardingActivityEnumeration.NO_BOARDING) {
+                                stopTime.setDropOffType(PICKDROP_NONE);
+                            }
+                        }
                     }
 
                     stopTime.setTimepoint(1); //Exact time
 
-                    if (estimatedCall.isCancellation() == null  ||
-                            (estimatedCall.isCancellation() != null && !estimatedCall.isCancellation())) {
-                        //Cancellation is not set, or is set to 'false'
-                        modifiedStops.add(stopTime);
-                    }
+                    modifiedStops.add(stopTime);
                     break;
                 }
             }
@@ -809,7 +898,6 @@ public class Timetable implements Serializable {
                 stopTime.setDepartureTime(oldTimes.getDepartureTime(counter));
                 modifiedStops.add(stopTime);
             }
-            counter++;
         }
 
         return modifiedStops;

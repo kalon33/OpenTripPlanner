@@ -19,7 +19,7 @@ function build_graph {
   mkdir -p $DIR
   unzip -o -d $DIR $FILE
   mv $DIR/router-$GRAPHNAME $DIR/$GRAPHNAME
-  java $JAVA_OPTS -jar $JAR --build $DIR/$GRAPHNAME 
+  java $JAVA_OPTS -jar $JAR --build $DIR/$GRAPHNAME
 }
 
 function download_graph {
@@ -88,4 +88,4 @@ echo ROUTER $ROUTER_NAME
 download_graph $ROUTER_NAME $VERSION || process $ROUTER_NAME
 
 echo "graphString is: $ROUTER_NAME"
-java $JAVA_OPTS -Duser.timezone=Europe/Helsinki -jar $JAR --server --port $PORT --securePort $SECURE_PORT --basePath ./ --graphs ./graphs --router $ROUTER_NAME
+java -Dsentry.release=$VERSION $JAVA_OPTS -Duser.timezone=Europe/Helsinki -jar $JAR --server --port $PORT --securePort $SECURE_PORT --basePath ./ --graphs ./graphs --router $ROUTER_NAME

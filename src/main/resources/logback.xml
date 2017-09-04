@@ -18,9 +18,15 @@
     </encoder>
   </appender>
 
+  <appender name="Sentry" class="com.getsentry.raven.logback.SentryAppender">
+    <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+      <level>WARN</level>
+    </filter>
+  </appender>
   <!-- Change this to debug to let more messages through. -->
   <root level="info">
     <appender-ref ref="stdout" />
+    <appender-ref ref="Sentry" />
   </root>
   <logger name="ch.qos.logback" level="warn"/>
   <logger name="com.amazonaws" level="info"/>
@@ -31,6 +37,7 @@
   <logger name="org.opentripplanner" level="info" />
   <logger name="org.opentripplanner.analyst" level="info" />
   <logger name="org.opentripplanner.routing" level="info" />
+  <logger name="com.getsentry" level="error"/>
   <logger name="org.opentripplanner.routing.impl.RetryingPathServiceImpl" level="info" />
   <logger name="org.opentripplanner.routing.algorithm.GenericAStar" level="info" />
   <!-- Avoid printing debug messages about free-flowing vertices -->

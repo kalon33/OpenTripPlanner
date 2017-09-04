@@ -8,7 +8,6 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import com.google.common.collect.ImmutableMap;
 import org.onebusaway.gtfs.model.AgencyAndId;
 import org.opentripplanner.api.common.Message;
 import org.opentripplanner.api.common.ParameterException;
@@ -22,15 +21,18 @@ import org.opentripplanner.api.resource.GraphPathToTripPlanConverter;
 import org.opentripplanner.common.model.GenericLocation;
 import org.opentripplanner.routing.core.OptimizeType;
 import org.opentripplanner.routing.core.RoutingRequest;
+import org.opentripplanner.routing.core.ZoneIdSet;
 import org.opentripplanner.routing.graph.GraphIndex;
 import org.opentripplanner.routing.impl.GraphPathFinder;
 import org.opentripplanner.routing.spt.GraphPath;
 import org.opentripplanner.standalone.Router;
 import org.opentripplanner.util.ResourceBundleSingleton;
-
-import graphql.schema.DataFetchingEnvironment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.google.common.collect.ImmutableMap;
+
+import graphql.schema.DataFetchingEnvironment;
 
 public class GraphQlPlanner {
 
@@ -148,7 +150,9 @@ public class GraphQlPlanner {
         callWith.argument("numItineraries", request::setNumItineraries);
         callWith.argument("maxWalkDistance", request::setMaxWalkDistance);
         callWith.argument("maxPreTransitTime", request::setMaxPreTransitTime);
+        callWith.argument("carParkCarLegWeight", request::setCarParkCarLegWeight);
         callWith.argument("walkReluctance", request::setWalkReluctance);
+        callWith.argument("walkOnStreetReluctance", request::setWalkOnStreetReluctance);
         callWith.argument("waitReluctance", request::setWaitReluctance);
         callWith.argument("waitAtBeginningFactor", request::setWaitAtBeginningFactor);
         callWith.argument("walkSpeed", (Double v) -> request.walkSpeed = v);
@@ -199,6 +203,15 @@ public class GraphQlPlanner {
         if (hasArgument(environment, "modes")) {
             new QualifiedModeSet(environment.getArgument("modes")).applyToRoutingRequest(request);
             request.setModes(request.modes);
+        }
+        
+        if (hasArgument(environment, "ticketTypes")) {
+            String ticketTypes = environment.getArgument("ticketTypes");
+            request.setZoneIdSet(ZoneIdSet.create(index,  ticketTypes));
+            //TODO should we increase max walk distance?
+            //request.setMaxWalkDistance(request.getMaxWalkDistance()*2); 
+        } else {
+            request.setZoneIdSet(new ZoneIdSet());
         }
 
         if (request.allowBikeRental && !hasArgument(environment, "bikeSpeed")) {

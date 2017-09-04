@@ -151,6 +151,8 @@ public class RoutingRequest implements Cloneable, Serializable {
 
     public double carSpeed;
 
+    private ZoneIdSet zones = new ZoneIdSet();
+
     public Locale locale = new Locale("en", "US");
 
     /**
@@ -180,6 +182,9 @@ public class RoutingRequest implements Cloneable, Serializable {
     
     /** Multiplicative factor on expected turning time. */
     public double turnReluctance = 1.0;
+
+    /** How much more reluctant is the user to walk on streets with car traffic allowed **/
+    public double walkOnStreetReluctance = 1.0;
 
     /**
      * How long does it take to get an elevator, on average (actually, it probably should be a bit *more* than average, to prevent optimistic trips)?
@@ -353,6 +358,11 @@ public class RoutingRequest implements Cloneable, Serializable {
     public boolean reverseOptimizeOnTheFly = false;
 
     /**
+     * When true, do a full reversed search to compact the legs of the GraphPath.
+     */
+    public boolean compactLegsByReversedSearch = true;
+
+    /**
      * If true, cost turns as they would be in a country where driving occurs on the right; otherwise, cost them as they would be in a country where
      * driving occurs on the left.
      */
@@ -446,6 +456,11 @@ public class RoutingRequest implements Cloneable, Serializable {
      * This is used so that TrivialPathException is thrown if origin and destination search would split the same edge
      */
     private StreetEdge splitEdge = null;
+
+    /**
+     * How expensive it is to drive a car when car&parking, increase this value to make car driving parts shorter. 
+     */
+    public double carParkCarLegWeight = 1;
 
     /* CONSTRUCTORS */
 
@@ -924,6 +939,7 @@ public class RoutingRequest implements Cloneable, Serializable {
                 && transferPenalty == other.transferPenalty
                 && maxSlope == other.maxSlope
                 && walkReluctance == other.walkReluctance
+                && walkOnStreetReluctance == other.walkOnStreetReluctance
                 && waitReluctance == other.waitReluctance
                 && waitAtBeginningFactor == other.waitAtBeginningFactor
                 && walkBoardCost == other.walkBoardCost
@@ -961,7 +977,8 @@ public class RoutingRequest implements Cloneable, Serializable {
                 && Objects.equal(startingTransitTripId, other.startingTransitTripId)
                 && useTraffic == other.useTraffic
                 && disableAlertFiltering == other.disableAlertFiltering
-                && geoidElevation == other.geoidElevation;
+                && geoidElevation == other.geoidElevation
+                && this.carParkCarLegWeight == other.carParkCarLegWeight;
     }
 
     /**
@@ -978,6 +995,7 @@ public class RoutingRequest implements Cloneable, Serializable {
                 + new Double(maxTransferWalkDistance).hashCode()
                 + new Double(transferPenalty).hashCode() + new Double(maxSlope).hashCode()
                 + new Double(walkReluctance).hashCode() + new Double(waitReluctance).hashCode()
+                + new Double(walkOnStreetReluctance).hashCode()
                 + new Double(waitAtBeginningFactor).hashCode() * 15485863
                 + walkBoardCost + bikeBoardCost + bannedRoutes.hashCode()
                 + bannedTrips.hashCode() * 1373 + transferSlack * 20996011
@@ -991,7 +1009,8 @@ public class RoutingRequest implements Cloneable, Serializable {
                 + new Boolean(reverseOptimizeOnTheFly).hashCode() * 95112799
                 + new Boolean(ignoreRealtimeUpdates).hashCode() * 154329
                 + new Boolean(disableRemainingWeightHeuristic).hashCode() * 193939
-                + new Boolean(useTraffic).hashCode() * 10169;
+                + new Boolean(useTraffic).hashCode() * 10169
+                + new Double(carParkCarLegWeight).hashCode();
         if (batch) {
             hashCode *= -1;
             // batch mode, only one of two endpoints matters
@@ -1091,19 +1110,6 @@ public class RoutingRequest implements Cloneable, Serializable {
         return i == null ? 0 : i;
     }
 
-    private String getRouteOrAgencyStr(HashSet<String> strings) {
-        StringBuilder builder = new StringBuilder();
-        for (String agency : strings) {
-            builder.append(agency);
-            builder.append(",");
-        }
-        if (builder.length() > 0) {
-            // trim trailing comma
-            builder.setLength(builder.length() - 1);
-        }
-        return builder.toString();
-    }
-
     public void setMaxWalkDistance(double maxWalkDistance) {
         if (maxWalkDistance > 0) {
             this.maxWalkDistance = maxWalkDistance;
@@ -1117,11 +1123,23 @@ public class RoutingRequest implements Cloneable, Serializable {
             bikeWalkingOptions.maxPreTransitTime = maxPreTransitTime;
         }
     }
+    
+    public void setCarParkCarLegWeight(double carParkCarLegWeight) {
+        if(carParkCarLegWeight>0) {
+            this.carParkCarLegWeight = carParkCarLegWeight;
+        }
+    }
 
     public void setWalkReluctance(double walkReluctance) {
         if (walkReluctance > 0) {
             this.walkReluctance = walkReluctance;
             // Do not set bikeWalkingOptions.walkReluctance here, because that needs a higher value.
+        }
+    }
+
+    public void setWalkOnStreetReluctance(double walkOnStreetReluctance) {
+        if (walkOnStreetReluctance > 0) {
+            this.walkOnStreetReluctance = walkOnStreetReluctance;
         }
     }
 
@@ -1248,9 +1266,7 @@ public class RoutingRequest implements Cloneable, Serializable {
         if (triangleSafetyFactor == null || triangleSlopeFactor == null || triangleTimeFactor == null) {
             throw new ParameterException(Message.UNDERSPECIFIED_TRIANGLE);
         }
-        if (triangleSafetyFactor == null && triangleSlopeFactor == null && triangleTimeFactor == null) {
-            throw new ParameterException(Message.TRIANGLE_VALUES_NOT_SET);
-        }
+
         // FIXME couldn't this be simplified by only specifying TWO of the values?
         if (Math.abs(triangleSafetyFactor+ triangleSlopeFactor + triangleTimeFactor - 1) > Math.ulp(1) * 3) {
             throw new ParameterException(Message.TRIANGLE_NOT_AFFINE);
@@ -1282,5 +1298,17 @@ public class RoutingRequest implements Cloneable, Serializable {
             }
         }
 
+    }
+
+    /**
+     * Set allowed fare zones
+     * @param split
+     */
+    public void setZoneIdSet(ZoneIdSet zones) {
+        this.zones = zones; 
+    }
+    
+    public ZoneIdSet getZoneIdSet() {
+        return zones;
     }
 }

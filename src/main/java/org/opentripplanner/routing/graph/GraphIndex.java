@@ -5,10 +5,11 @@ import static java.util.stream.Collectors.toList;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.attribute.FileAttribute;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Calendar;
 import java.util.Collection;
@@ -26,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 
 import com.google.common.collect.ArrayListMultimap;
@@ -36,6 +38,7 @@ import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import graphql.ExceptionWhileDataFetching;
 import graphql.schema.GraphQLSchema;
+
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.vividsolutions.jts.geom.Coordinate;
 import com.vividsolutions.jts.geom.Envelope;
@@ -56,6 +59,7 @@ import org.opentripplanner.common.geometry.SphericalDistanceLibrary;
 import org.opentripplanner.common.model.GenericLocation;
 import org.opentripplanner.common.model.P2;
 import org.opentripplanner.gtfs.GtfsLibrary;
+import org.opentripplanner.index.FieldErrorInstrumentation;
 import org.opentripplanner.index.IndexGraphQLSchema;
 import org.opentripplanner.index.ResourceConstrainedExecutorServiceExecutionStrategy;
 import org.opentripplanner.index.model.StopTimesInPattern;
@@ -162,7 +166,6 @@ public class GraphIndex {
     public GraphIndex (Graph graph) {
         LOG.info("Indexing graph...");
         
-        
         FareService fareService = graph.getService(FareService.class);
         if(fareService instanceof DefaultFareServiceImpl) {
             LOG.info("Collecting fare information...");
@@ -265,14 +268,6 @@ public class GraphIndex {
                 stopClusterSpatialIndex.insert(envelope, cluster);
             }
         }
-    }
-
-    private void analyzeServices() {
-        // This is a mess because CalendarService, CalendarServiceData, etc. are all in OBA.
-        // TODO catalog days of the week and exceptions for each service day.
-        // Make a table of which services are running on each calendar day.
-        // Really the calendarService should be entirely replaced with a set
-        // of simple indexes in GraphIndex.
     }
 
     /** Get all trip patterns running through any stop in the given stop cluster. */
@@ -538,7 +533,6 @@ public class GraphIndex {
     private class PlaceFinderTraverseVisitor implements ExtendedTraverseVisitor {
         public List<PlaceAndDistance> placesFound = new ArrayList<>();
         private Set<TraverseMode> filterByModes;
-        private Set<PlaceType> filterByPlaceTypes;
         private Set<AgencyAndId> filterByStops;
         private Set<AgencyAndId> filterByRoutes;
         private Set<String> filterByBikeRentalStation;
@@ -564,7 +558,6 @@ public class GraphIndex {
                 List<String> filterByBikeParks,
                 List<String> filterByCarParks) {
             this.filterByModes = toSet(filterByModes);
-            this.filterByPlaceTypes = toSet(filterByPlaceTypes);
             this.filterByStops = toSet(filterByStops);
             this.filterByRoutes = toSet(filterByRoutes);
             this.filterByBikeRentalStation = toSet(filterByBikeRentalStations);
@@ -1009,10 +1002,10 @@ public class GraphIndex {
         }
     }
 
-    public Response getGraphQLResponse(String query, Router router, Map<String, Object> variables, String operationName, int timeout, long maxResolves) {
+    public Response getGraphQLResponse(String query, Router router, Map<String, Object> variables, String operationName, int timeout, long maxResolves, MultivaluedMap<String, String> headers) {
         Response.ResponseBuilder res = Response.status(Response.Status.OK);
         HashMap<String, Object> content = getGraphQLExecutionResult(query, router, variables,
-            operationName, timeout, maxResolves);
+            operationName, timeout, maxResolves, headers);
         if (content.get("errors") != null) {
             // TODO: Put correct error code, eg. 400 for syntax error
             res = Response.status(Response.Status.INTERNAL_SERVER_ERROR);
@@ -1021,18 +1014,19 @@ public class GraphIndex {
     }
 
     public HashMap<String, Object> getGraphQLExecutionResult(String query, Router router,
-        Map<String, Object> variables, String operationName, int timeout, long maxResolves) {
-        GraphQL graphQL = new GraphQL(
-            indexSchema,
+        Map<String, Object> variables, String operationName, int timeout, long maxResolves, MultivaluedMap<String, String> headers) {
+        
+        GraphQL graphQL = GraphQL.newGraphQL(indexSchema).queryExecutionStrategy(
             new ResourceConstrainedExecutorServiceExecutionStrategy(threadPool, timeout, TimeUnit.MILLISECONDS, maxResolves)
-        );
+        ).instrumentation(FieldErrorInstrumentation.get(query, router, variables, headers)).build();
 
         if (variables == null) {
             variables = new HashMap<>();
         }
-
+        
         ExecutionResult executionResult = graphQL.execute(query, operationName, router, variables);
         HashMap<String, Object> content = new HashMap<>();
+        
         if (!executionResult.getErrors().isEmpty()) {
             content.put("errors",
                 executionResult
@@ -1040,13 +1034,14 @@ public class GraphIndex {
                     .stream()
                     .map(error -> {
                         if (error instanceof ExceptionWhileDataFetching) {
+                            StringWriter sw = new StringWriter();
+                            PrintWriter pw = new PrintWriter(sw);
+                            ((ExceptionWhileDataFetching) error).getException().printStackTrace(pw);
                             HashMap<String, Object> response = new HashMap<String, Object>();
                             response.put("message", error.getMessage());
                             response.put("locations", error.getLocations());
                             response.put("errorType", error.getErrorType());
-                            // Convert stack trace to propr format
-                            Stream<StackTraceElement> stack = Arrays.stream(((ExceptionWhileDataFetching) error).getException().getStackTrace());
-                            response.put("stack", stack.map(StackTraceElement::toString).collect(Collectors.toList()));
+                            response.put("stack", sw.toString());
                             return response;
                         } else {
                             return error;

@@ -298,6 +298,8 @@ public class DefaultWayPropertySetSource implements WayPropertySetSource {
                 StreetTraversalPermission.PEDESTRIAN_AND_BICYCLE, 0.9, 0.9);
         props.setProperties("highway=pedestrian;bicycle=designated",
                 StreetTraversalPermission.PEDESTRIAN_AND_BICYCLE, 0.75, 0.75);
+        props.setProperties("highway=cycleway;bicycle=designated",
+                StreetTraversalPermission.PEDESTRIAN_AND_BICYCLE, 1.1, 1.1);
 
         /* sidewalk and crosswalk */
         props.setProperties("footway=sidewalk;highway=footway;bicycle=yes",
@@ -326,8 +328,6 @@ public class DefaultWayPropertySetSource implements WayPropertySetSource {
                 StreetTraversalPermission.PEDESTRIAN_AND_BICYCLE, 1.3, 1.3);
 
         /* bicycle=designated, but no bike infrastructure is present */
-        props.setProperties("highway=*;bicycle=designated",
-                StreetTraversalPermission.ALL, 0.97, 0.97);
         props.setProperties("highway=service;bicycle=designated", StreetTraversalPermission.ALL,
                 0.84, 0.84);
         props.setProperties("highway=residential;bicycle=designated",

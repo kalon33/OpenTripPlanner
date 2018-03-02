@@ -14,20 +14,15 @@
 
 package org.opentripplanner.api.model.error;
 
+import org.opentripplanner.api.common.LocationNotAccessible;
+import org.opentripplanner.api.common.Message;
+import org.opentripplanner.routing.error.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import org.opentripplanner.api.common.Message;
-import org.opentripplanner.api.common.LocationNotAccessible;
-import org.opentripplanner.routing.error.GraphNotFoundException;
-import org.opentripplanner.routing.error.PathNotFoundException;
-import org.opentripplanner.routing.error.SearchTimeoutException;
-import org.opentripplanner.routing.error.TransitTimesException;
-import org.opentripplanner.routing.error.TrivialPathException;
-import org.opentripplanner.routing.error.VertexNotFoundException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /** This API response element represents an error in trip planning. */
 public class PlannerError {
@@ -44,6 +39,7 @@ public class PlannerError {
         messages.put(TrivialPathException.class,     Message.TOO_CLOSE);
         messages.put(GraphNotFoundException.class,   Message.GRAPH_UNAVAILABLE);
         messages.put(IllegalArgumentException.class, Message.BOGUS_PARAMETER);
+        messages.put(TransportationNetworkCompanyAvailabilityException.class, Message.TRANSPORTATION_NETWORK_COMPANY_UNAVAILABLE);
     }
     private static Map<String, Message> stopNotFoundMessages;
     static {

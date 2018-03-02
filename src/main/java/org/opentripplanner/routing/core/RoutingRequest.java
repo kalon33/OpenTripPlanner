@@ -36,16 +36,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.GregorianCalendar;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.TimeZone;
+import java.util.*;
 
 import javax.xml.datatype.DatatypeConfigurationException;
 import javax.xml.datatype.DatatypeConstants;
@@ -477,6 +468,8 @@ public class RoutingRequest implements Cloneable, Serializable {
      * It is set to -1 to indicate that driving reluctance should not be used in default car routing requests.
      */
     public double driveReluctance = -1.0;
+
+    public String companies;
 
     /** Saves split edge which can be split on origin/destination search
      *
@@ -1366,5 +1359,9 @@ public class RoutingRequest implements Cloneable, Serializable {
     
     public ZoneIdSet getZoneIdSet() {
         return zones;
+    }
+
+    public void setTransportationNetworkCompanies(String companies) {
+        this.companies = companies;
     }
 }

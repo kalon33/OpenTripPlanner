@@ -473,6 +473,10 @@ public class RoutingRequest implements Cloneable, Serializable {
      */
     public double minimumTransportationNetworkCompanyDistance = 804.672;
 
+    // we store the earliest pickup time here and add it upon the first boarding
+    // this way, a graph search can proceed and give walking a time advantage
+    public Date earliestTransportationNetworkCompanyPickupAtOrigin = null;
+
     public String companies;
 
     /** Saves split edge which can be split on origin/destination search
@@ -1367,5 +1371,11 @@ public class RoutingRequest implements Cloneable, Serializable {
 
     public void setTransportationNetworkCompanies(String companies) {
         this.companies = companies;
+    }
+
+    public void setEarliestTransportationNetworkCompanyPickupAtOrigin(
+        Date earliestTransportationNetworkCompanyPickupAtOrigin
+    ) {
+        this.earliestTransportationNetworkCompanyPickupAtOrigin = earliestTransportationNetworkCompanyPickupAtOrigin;
     }
 }

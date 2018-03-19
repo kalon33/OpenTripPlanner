@@ -41,7 +41,7 @@ public class State implements Cloneable {
     protected Vertex vertex;
 
     // allow path reconstruction from states
-    public State backState;
+    protected State backState;
 
     public Edge backEdge;
 

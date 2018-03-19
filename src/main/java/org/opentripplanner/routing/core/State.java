@@ -41,7 +41,7 @@ public class State implements Cloneable {
     protected Vertex vertex;
 
     // allow path reconstruction from states
-    protected State backState;
+    public State backState;
 
     public Edge backEdge;
 
@@ -353,6 +353,13 @@ public class State implements Cloneable {
 
     public double getWeightDelta() {
         return this.weight - backState.weight;
+    }
+
+    public double getTransportationNetworkCompanyDistanceDelta() {
+        if (backState != null)
+            return Math.abs(this.transportationNetworkCompanyDriveDistance - backState.transportationNetworkCompanyDriveDistance);
+        else
+            return 0;
     }
 
     public void checkNegativeWeight() {
@@ -727,6 +734,7 @@ public class State implements Cloneable {
                 editor.incrementWeight(orig.getWeightDelta());
                 editor.incrementWalkDistance(orig.getWalkDistanceDelta());
                 editor.incrementPreTransitTime(orig.getPreTransitTimeDelta());
+                editor.incrementTransportationNetworkCompanyDistance(orig.getTransportationNetworkCompanyDistanceDelta());
                 
                 // propagate the modes through to the reversed edge
                 editor.setBackMode(orig.getBackMode());

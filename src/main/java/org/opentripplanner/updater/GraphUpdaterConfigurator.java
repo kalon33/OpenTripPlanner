@@ -18,7 +18,11 @@ import org.opentripplanner.routing.graph.Graph;
 import org.opentripplanner.updater.alerts.GtfsRealtimeAlertsUpdater;
 import org.opentripplanner.updater.bike_park.BikeParkUpdater;
 import org.opentripplanner.updater.bike_rental.BikeRentalUpdater;
+<<<<<<< HEAD
 import org.opentripplanner.updater.car_park.CarParkUpdater;
+=======
+import org.opentripplanner.updater.car_rental.CarRentalUpdater;
+>>>>>>> 93e462584... Add car rentals updater and API endpoint
 import org.opentripplanner.updater.example.ExampleGraphUpdater;
 import org.opentripplanner.updater.example.ExamplePollingGraphUpdater;
 import org.opentripplanner.updater.stoptime.MqttGtfsRealtimeUpdater;
@@ -122,6 +126,9 @@ public abstract class GraphUpdaterConfigurator {
                 }
                 else if (type.equals("transportation-network-company-updater")) {
                     updater = new TransportationNetworkCompanyUpdater();
+                }
+                else if (type.equals("car-rental-updater")) {
+                    updater = new CarRentalUpdater();
                 }
             }
 

@@ -14,14 +14,20 @@
 package org.opentripplanner.routing.car_park;
 
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+<<<<<<< HEAD
 import com.vividsolutions.jts.geom.Geometry;
 import org.opentripplanner.util.I18NString;
+=======
+>>>>>>> 93e462584... Add car rentals updater and API endpoint
 
 import javax.xml.bind.annotation.XmlAttribute;
 import java.io.Serializable;
 import java.util.Locale;
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 93e462584... Add car rentals updater and API endpoint
 public class CarPark implements Serializable {
     private static final long serialVersionUID = 8311460609708089384L;
 
@@ -35,7 +41,11 @@ public class CarPark implements Serializable {
 
     @XmlAttribute
     @JsonSerialize
+<<<<<<< HEAD
     public I18NString name;
+=======
+    public String name;
+>>>>>>> 93e462584... Add car rentals updater and API endpoint
 
     /** Note: x = Longitude, y = Latitude */
     @XmlAttribute
@@ -46,20 +56,28 @@ public class CarPark implements Serializable {
     @JsonSerialize
     public int spacesAvailable = Integer.MAX_VALUE;
 
+<<<<<<< HEAD
     @XmlAttribute
     @JsonSerialize
     public int maxCapacity = Integer.MAX_VALUE;
 
     /**
      * Whether this parking has space available information updated in real-time. If no real-time
+=======
+    /**
+     * Whether this station has space available information updated in real-time. If no real-time
+>>>>>>> 93e462584... Add car rentals updater and API endpoint
      * data, users should take spacesAvailable with a pinch of salt, as they are a crude estimate.
      */
     @XmlAttribute
     @JsonSerialize
     public boolean realTimeData = true;
 
+<<<<<<< HEAD
     public Geometry geometry;
 
+=======
+>>>>>>> 93e462584... Add car rentals updater and API endpoint
     public boolean equals(Object o) {
         if (!(o instanceof CarPark)) {
             return false;

@@ -462,6 +462,7 @@ public class RoutingRequest implements Cloneable, Serializable {
       This is a temporary solution, as it only covers parking and rental at the beginning of the trip.
     */
     public boolean allowBikeRental = false;
+    public boolean allowCarRental = false;
     public boolean bikeParkAndRide = false;
     public boolean parkAndRide  = false;
     public boolean kissAndRide  = false;
@@ -504,11 +505,23 @@ public class RoutingRequest implements Cloneable, Serializable {
      */
     public double minimumTransportationNetworkCompanyDistance = 804.672;
 
+    /**
+     * A mimum travel distance for a ride in a car rental.
+     * Units in meters, default is 0.5 miles.
+     */
+    public double minimumCarRentalDistance = 804.672;
+
     // we store the earliest pickup time here and add it upon the first boarding
     // this way, a graph search can proceed and give walking a time advantage
     public Date earliestTransportationNetworkCompanyPickupAtOrigin = null;
 
     public String companies;
+
+    public String minTransitDistance;
+
+    // setting of allowing a dropoff anywhere regardless of a compatible car rental region
+    //  (ie planning a trip with a rental car with the intent to keep the car and drive it later)
+    public boolean allowCarRentalDropoffOutsideCarRentalRegion = false;
 
     /** Saves split edge which can be split on origin/destination search
      *

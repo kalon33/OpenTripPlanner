@@ -125,7 +125,7 @@ otp.config = {
     siteName            : "Planificateur de trajets sur l'Île de France",
     siteDescription     : "Une instance d'OpenTripPlanner",
     logoGraphic         : 'images/otp_logo_darkbg_40px.png',
-    bikeshareName    : "JCDecaux",
+    bikeshareName    : "Vélib",
     //Enable this if you want to show frontend language chooser
     showLanguageChooser : true,
 
@@ -213,7 +213,7 @@ otp.config = {
 };
 var options = {
 	resGetPath: 'js/otp/locale/__lng__.json',
-	fallbackLng: 'fr',
+	fallbackLng: 'en',
         nsseparator: ';;', //Fixes problem when : is in translation text
         keyseparator: '_|_',
 	preload: ['fr'],
@@ -339,9 +339,9 @@ otp.config.modes = {
     'WALK,BICYCLE_RENT'        :_tr('Rented Bicycle'),
     //TRANSLATORS: Travel by: mode of transport (Used in selection in Travel
     //Options widgets)
-    'TRANSIT,WALK,BICYCLE_RENT': _tr('Transit & Rented Bicycle')
+    'TRANSIT,WALK,BICYCLE_RENT': _tr('Transit & Rented Bicycle'),
     //uncomment only if transportation network companies exists in a map
     //TRANSLATORS: Travel by: mode of transport (Used in selection in Travel
     //Options widgets)
-    "CAR_HAIL,WALK,TRANSIT"     : _tr('TNC &amp; Transit'),
+    "CAR_HAIL,WALK,TRANSIT"     : _tr('TNC & Transit')
     };

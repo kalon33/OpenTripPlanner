@@ -27,6 +27,7 @@ import org.opentripplanner.routing.transportation_network_company.Transportation
 import org.opentripplanner.standalone.OTPServer;
 import org.opentripplanner.standalone.Router;
 import org.opentripplanner.util.ResourceBundleSingleton;
+import org.opentripplanner.gtfs.GtfsLibrary;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -337,11 +338,11 @@ public abstract class RoutingResource {
     @QueryParam("batch")
     protected Boolean batch;
 
-    /** A transit stop required to be the first stop in the search (AgencyId_StopId) */
+    /** A transit stop required to be the first stop in the search (AgencyId:StopId) */
     @QueryParam("startTransitStopId")
     protected String startTransitStopId;
 
-    /** A transit trip acting as a starting "state" for depart-onboard routing (AgencyId_TripId) */
+    /** A transit trip acting as a starting "state" for depart-onboard routing (AgencyId:TripId) */
     @QueryParam("startTransitTripId")
     protected String startTransitTripId;
 
@@ -640,10 +641,10 @@ public abstract class RoutingResource {
         request.useBikeRentalAvailabilityInformation = (tripPlannedForNow); // TODO the same thing for GTFS-RT
 
         if (startTransitStopId != null && !startTransitStopId.isEmpty())
-            request.startingTransitStopId = AgencyAndId.convertFromString(startTransitStopId);
+            request.startingTransitStopId = GtfsLibrary.convertIdFromString(startTransitStopId);
 
         if (startTransitTripId != null && !startTransitTripId.isEmpty())
-            request.startingTransitTripId = AgencyAndId.convertFromString(startTransitTripId);
+            request.startingTransitTripId = GtfsLibrary.convertIdFromString(startTransitTripId);
 
         if (clampInitialWait != null)
             request.clampInitialWait = clampInitialWait;

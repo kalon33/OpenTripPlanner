@@ -117,8 +117,8 @@ public class GbfsBikeRentalDataSource implements BikeRentalDataSource, JsonConfi
             BikeRentalStation brstation = new BikeRentalStation();
 
             brstation.id = stationNode.path("station_id").toString();
-            brstation.bikesAvailable = stationNode.path("num_bikes_available").asInt();
-            brstation.spacesAvailable = stationNode.path("num_docks_available").asInt();
+            brstation.bikesAvailable = stationNode.path("numBikesAvailable").asInt();
+            brstation.spacesAvailable = stationNode.path("numDocksAvailable").asInt();
 
             return brstation;
         }

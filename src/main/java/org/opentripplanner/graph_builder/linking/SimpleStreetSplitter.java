@@ -194,13 +194,6 @@ public class SimpleStreetSplitter {
 
         double duplicateDeg = SphericalDistanceLibrary.metersToDegrees(DUPLICATE_WAY_EPSILON_METERS);
 
-        final TraverseModeSet traverseModeSet;
-        if (traverseMode == TraverseMode.BICYCLE) {
-            traverseModeSet = new TraverseModeSet(traverseMode, TraverseMode.WALK);
-        } else {
-            traverseModeSet = new TraverseModeSet(traverseMode);
-        }
-
         List<StreetEdge> walkableEdges = idx.query(env).stream()
                 .filter(streetEdge -> streetEdge instanceof StreetEdge)
                 .map(edge -> (StreetEdge) edge)

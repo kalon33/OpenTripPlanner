@@ -35,7 +35,7 @@ public class CarPark implements Serializable {
     @XmlAttribute
     @JsonSerialize
     public I18NString name;
-    public String name;
+//    public String name;
 
     /** Note: x = Longitude, y = Latitude */
     @XmlAttribute

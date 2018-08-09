@@ -138,6 +138,9 @@ public class State implements Cloneable {
             this.stateData.bikeParked = options.arriveBy;
             this.stateData.nonTransitMode = this.stateData.bikeParked ? TraverseMode.WALK
                     : TraverseMode.BICYCLE;
+        } else if (options.rideAndKiss) {
+            this.stateData.carParked = !options.arriveBy;
+            this.stateData.nonTransitMode = this.stateData.carParked ? TraverseMode.WALK : TraverseMode.CAR;
         }
         // if allowed to hail a car, initialize state with CAR mode if we're already in a hailed car
         else if (options.useTransportationNetworkCompany) {
@@ -304,10 +307,12 @@ public class State implements Cloneable {
     public boolean isFinal() {
         // When drive-to-transit is enabled, we need to check whether the car has been parked (or whether it has been picked up in reverse).
         boolean parkAndRide = stateData.opt.parkAndRide || stateData.opt.kissAndRide;
+        boolean rideAndPark = stateData.opt.rideAndKiss;
         boolean bikeParkAndRide = stateData.opt.bikeParkAndRide;
         boolean bikeRentingOk = false;
         boolean bikeParkAndRideOk = false;
         boolean carParkAndRideOk = false;
+        boolean carRideAndParkOk = false;
         boolean tncOK = !stateData.opt.useTransportationNetworkCompany || (
             isEverBoarded() &&
             (!isUsingHailedCar() || isTNCStopAllowed())
@@ -320,12 +325,14 @@ public class State implements Cloneable {
             bikeRentingOk = !isBikeRenting();
             bikeParkAndRideOk = !bikeParkAndRide || !isBikeParked();
             carParkAndRideOk = !parkAndRide || !isCarParked();
+            carRideAndParkOk = !rideAndPark || isCarParked();
         } else {
             bikeRentingOk = !isBikeRenting();
             bikeParkAndRideOk = !bikeParkAndRide || isBikeParked();
             carParkAndRideOk = !parkAndRide || isCarParked();
+            carRideAndParkOk = !rideAndPark || !isCarParked();
         }
-        return bikeRentingOk && bikeParkAndRideOk && carParkAndRideOk && tncOK && carRentingOk;
+        return bikeRentingOk && bikeParkAndRideOk && carParkAndRideOk && carRideAndParkOk && tncOK && carRentingOk;
     }
 
     public Stop getPreviousStop() {

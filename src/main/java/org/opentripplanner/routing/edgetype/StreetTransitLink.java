@@ -113,8 +113,7 @@ public class StreetTransitLink extends Edge {
         /* Determine if transit should be boarded if currently driving a car */
         /* Note that in arriveBy searches this is double-traversing link edges to fork the state into both WALK and CAR mode. This is an insane hack. */
         if (s0.getNonTransitMode() == TraverseMode.CAR) {
-            // OK to leave car if in Kiss and Ride mode
-            if (req.kissAndRide && !s0.isCarParked()) {
+            if ((req.kissAndRide && !s0.isCarParked()) || (req.rideAndKiss && s0.isCarParked())) {
                 s1.setCarParked(true);
             } else if (req.useTransportationNetworkCompany && s0.isUsingHailedCar()) {
                 // check to see if transit may be used after using hailed car

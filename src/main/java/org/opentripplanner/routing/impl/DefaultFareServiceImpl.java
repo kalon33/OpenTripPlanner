@@ -219,15 +219,10 @@ public class DefaultFareServiceImpl implements FareService, Serializable {
         for (Map.Entry<FareType, Collection<FareRuleSet>> kv : fareRulesPerType.entrySet()) {
             FareType fareType = kv.getKey();
             Collection<FareRuleSet> fareRules = kv.getValue();
-
-            // pick up a random currency from fareAttributes,
-            // we assume that all tickets use the same currency
+            // Get the currency from the first fareAttribute, assuming that all tickets use the same currency.
             Currency currency = null;
-            WrappedCurrency wrappedCurrency = null;
             if (fareRules.size() > 0) {
-                currency = Currency.getInstance(fareRules.iterator().next().getFareAttribute()
-                        .getCurrencyType());
-                wrappedCurrency = new WrappedCurrency(currency);
+                currency = Currency.getInstance(fareRules.iterator().next().getFareAttribute().getCurrencyType());
             }
             hasFare = populateFare(fare, currency, fareType, rides, fareRules);
         }
@@ -348,7 +343,7 @@ public class DefaultFareServiceImpl implements FareService, Serializable {
         return getBestFareAndId(fareType, rides, fareRules).fare;
     }
 
-    private FareAndId getBestFareAndId(FareType fareType, List<Ride> rides,
+    protected FareAndId getBestFareAndId(FareType fareType, List<Ride> rides,
             Collection<FareRuleSet> fareRules) {
         Set<String> zones = new HashSet<String>();
         Set<AgencyAndId> routes = new HashSet<AgencyAndId>();
@@ -420,8 +415,8 @@ public class DefaultFareServiceImpl implements FareService, Serializable {
         }
         return new FareAndId(bestFare, bestAttribute == null ? null : bestAttribute.getId());
     }
-    
-    private float getFarePrice(FareAttribute fare, FareType type) {
+
+    protected float getFarePrice(FareAttribute fare, FareType type) {
     	switch(type) {
 		case senior:
 			if (fare.getSeniorPrice() >= 0) {

@@ -13,7 +13,6 @@
 
 package org.opentripplanner.routing.core;
 
-import java.util.Arrays;
 import java.util.Date;
 import java.util.Set;
 
@@ -25,6 +24,7 @@ import org.opentripplanner.routing.edgetype.*;
 import org.opentripplanner.routing.graph.Edge;
 import org.opentripplanner.routing.graph.Vertex;
 import org.opentripplanner.routing.trippattern.TripTimes;
+import org.opentripplanner.routing.vertextype.BikeRentalStationVertex;
 import org.opentripplanner.routing.vertextype.ElevatorOffboardVertex;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -126,7 +126,11 @@ public class State implements Cloneable {
             this.stateData.bikeParked = options.arriveBy;
             this.stateData.nonTransitMode = this.stateData.bikeParked ? TraverseMode.WALK
                     : TraverseMode.BICYCLE;
+        } else if (options.rideAndKiss) {
+            this.stateData.carParked = !options.arriveBy;
+            this.stateData.nonTransitMode = this.stateData.carParked ? TraverseMode.WALK : TraverseMode.CAR;
         }
+
         this.walkDistance = 0;
         this.preTransitTime = 0;
         this.time = timeSeconds * 1000;
@@ -278,20 +282,24 @@ public class State implements Cloneable {
     public boolean isFinal() {
         // When drive-to-transit is enabled, we need to check whether the car has been parked (or whether it has been picked up in reverse).
         boolean parkAndRide = stateData.opt.parkAndRide || stateData.opt.kissAndRide;
+        boolean rideAndPark = stateData.opt.rideAndKiss;
         boolean bikeParkAndRide = stateData.opt.bikeParkAndRide;
         boolean bikeRentingOk = false;
         boolean bikeParkAndRideOk = false;
         boolean carParkAndRideOk = false;
+        boolean carRideAndParkOk = false;
         if (stateData.opt.arriveBy) {
             bikeRentingOk = !isBikeRenting();
             bikeParkAndRideOk = !bikeParkAndRide || !isBikeParked();
             carParkAndRideOk = !parkAndRide || !isCarParked();
+            carRideAndParkOk = !rideAndPark || isCarParked();
         } else {
             bikeRentingOk = !isBikeRenting();
             bikeParkAndRideOk = !bikeParkAndRide || isBikeParked();
             carParkAndRideOk = !parkAndRide || isCarParked();
+            carRideAndParkOk = !rideAndPark || !isCarParked();
         }
-        return bikeRentingOk && bikeParkAndRideOk && carParkAndRideOk;
+        return bikeRentingOk && bikeParkAndRideOk && carParkAndRideOk && carRideAndParkOk;
     }
 
     public Stop getPreviousStop() {
@@ -710,6 +718,9 @@ public class State implements Cloneable {
                         return unoptimized.reverse();
                 }
             }
+            // Not reverse-optimizing, so we don't re-traverse the edges backward.
+            // Instead we just replicate all the states, and replicate the deltas between the state's incremental fields.
+            // TODO determine whether this is really necessary, and whether there's a more maintainable way to do this.
             else {
                 StateEditor editor = ret.edit(edge);
                 // note the distinction between setFromState and setBackState
@@ -723,8 +734,11 @@ public class State implements Cloneable {
                 // propagate the modes through to the reversed edge
                 editor.setBackMode(orig.getBackMode());
 
-                if (orig.isBikeRenting() != orig.getBackState().isBikeRenting())
-                    editor.setBikeRenting(!orig.isBikeRenting());
+                if (orig.isBikeRenting() && !orig.getBackState().isBikeRenting()) {
+                    editor.doneVehicleRenting();
+                } else if (!orig.isBikeRenting() && orig.getBackState().isBikeRenting()) {
+                    editor.beginVehicleRenting(((BikeRentalStationVertex)orig.vertex).getVehicleMode());
+                }
                 if (orig.isCarParked() != orig.getBackState().isCarParked())
                     editor.setCarParked(!orig.isCarParked());
                 if (orig.isBikeParked() != orig.getBackState().isBikeParked())

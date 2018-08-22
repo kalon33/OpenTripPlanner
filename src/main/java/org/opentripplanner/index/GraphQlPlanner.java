@@ -6,6 +6,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.ImmutableMap;
@@ -17,6 +18,7 @@ import org.opentripplanner.api.common.RoutingResource;
 import org.opentripplanner.api.model.Place;
 import org.opentripplanner.api.model.TripPlan;
 import org.opentripplanner.api.model.error.PlannerError;
+import org.opentripplanner.api.parameter.QualifiedMode;
 import org.opentripplanner.api.parameter.QualifiedModeSet;
 import org.opentripplanner.api.resource.DebugOutput;
 import org.opentripplanner.api.resource.GraphPathToTripPlanConverter;
@@ -145,10 +147,17 @@ public class GraphQlPlanner {
         double lat = (double) m.get("lat");
         double lng = (double) m.get("lon");
         String address = (String) m.get("address");
+        Integer locationSlack = (Integer) m.get("locationSlack");
+
         if (address != null) {
-            return new GenericLocation(address, Double.toString(lat) + "," + Double.toString(lng));
+            return locationSlack != null
+                ? new GenericLocation(address, Double.toString(lat) + "," + Double.toString(lng), locationSlack)
+                : new GenericLocation(address, Double.toString(lat) + "," + Double.toString(lng));
         }
-        return new GenericLocation(lat, lng);
+
+        return locationSlack != null
+            ? new GenericLocation(lat, lng, locationSlack)
+            : new GenericLocation(lat, lng);
     }
 
     private RoutingRequest createRequest(DataFetchingEnvironment environment) {
@@ -227,14 +236,24 @@ public class GraphQlPlanner {
             request.transferPenalty += 1800;
         }
 
-        callWith.argument("batch", (Boolean v) -> request.batch = v);
+	//Set argument 'batch' to false, as it causes timeouts and is not useful for point-to-point itinerary planning
+        callWith.argument("batch", (Boolean v) -> /*request.batch = v*/ request.batch = false);
 
         if (optimize != null) {
             request.optimize = optimize;
         }
 
-        if (hasArgument(environment, "modes")) {
-            new QualifiedModeSet(environment.getArgument("modes")).applyToRoutingRequest(request);
+
+        if (hasArgument(environment, "transportModes")) {
+            new QualifiedModeSet(((List<Map<String, Object>>)environment.getArgument("transportModes"))
+                                                                .stream()
+                                                                .map(transportMode -> new QualifiedMode((TraverseMode)transportMode.get("mode"), (QualifiedMode.Qualifier)transportMode.get("qualifier")))
+                                                                .collect(Collectors.toList())).applyToRoutingRequest(request);
+            request.setModes(request.modes);
+        }
+
+        if (hasArgument(environment, "modes") && !hasArgument(environment, "transportModes")) {
+            new QualifiedModeSet((String)environment.getArgument("modes")).applyToRoutingRequest(request);
             request.setModes(request.modes);
         }
 

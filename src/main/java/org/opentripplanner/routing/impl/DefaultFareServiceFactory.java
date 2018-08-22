@@ -35,9 +35,9 @@ import java.util.Map;
 /**
  * Implements the default GTFS fare rules as described in
  * http://groups.google.com/group/gtfs-changes/msg/4f81b826cb732f3b
- * 
+ *
  * @author novalis
- * 
+ *
  */
 public class DefaultFareServiceFactory implements FareServiceFactory {
 
@@ -111,9 +111,9 @@ public class DefaultFareServiceFactory implements FareServiceFactory {
     /**
      * Build a specific FareServiceFactory given the config node, or fallback to the default if none
      * specified.
-     * 
+     *
      * Accept different formats. Examples:
-     * 
+     *
      * <pre>
      * { fares : "seattle" }
      * --------------------------
@@ -160,7 +160,7 @@ public class DefaultFareServiceFactory implements FareServiceFactory {
         if (type == null) {
             type = "default";
         }
-
+        LOG.debug("Fare type = " + type);
         FareServiceFactory retval;
         switch (type) {
         case "default":
@@ -172,6 +172,9 @@ public class DefaultFareServiceFactory implements FareServiceFactory {
         case "bike-rental-time-based":
             retval = new TimeBasedBikeRentalFareServiceFactory();
             break;
+        case "dutch":
+            retval = new DutchFareServiceFactory();
+            break;
         case "san-francisco":
             retval = new SFBayFareServiceFactory();
             break;
@@ -180,6 +183,9 @@ public class DefaultFareServiceFactory implements FareServiceFactory {
             break;
         case "seattle":
             retval = new SeattleFareServiceFactory();
+            break;
+        case "HSL":
+            retval = new HSLFareServiceFactory();
             break;
         default:
             throw new IllegalArgumentException(String.format("Unknown fare type: '%s'", type));

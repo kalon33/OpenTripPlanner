@@ -295,7 +295,7 @@ public class IndexGraphQLSchema {
 
     private GraphQLInterfaceType placeInterface = GraphQLInterfaceType.newInterface()
         .name("PlaceInterface")
-        .description("Interface for places, i.e. stops, stations, parks")
+        .description("Interface for places, e.g. stops, stations, parking areas..")
         .field(GraphQLFieldDefinition.newFieldDefinition()
             .name("id")
             .type(new GraphQLNonNull(Scalars.GraphQLID))
@@ -1136,6 +1136,7 @@ public class IndexGraphQLSchema {
 
         stopType = GraphQLObjectType.newObject()
             .name("Stop")
+            .description("Stop can represent either a single public transport stop, where passengers can board and/or disembark vehicles, or a station, which contains multiple stops. See field `locationType`.")
             .withInterface(nodeInterface)
             .withInterface(placeInterface)
             .field(GraphQLFieldDefinition.newFieldDefinition()
@@ -1483,7 +1484,7 @@ public class IndexGraphQLSchema {
 
         stoptimeType = GraphQLObjectType.newObject()
             .name("Stoptime")
-	    .description("Time of arrival and/or departure at a stop")
+	        .description("Stoptime represents the time when a specific trip arrives to or departs from a specific stop.")
             .field(GraphQLFieldDefinition.newFieldDefinition()
                 .name("stop")
                 .description("The stop where this arrival/departure happens")
@@ -1595,7 +1596,7 @@ public class IndexGraphQLSchema {
 
         tripType = GraphQLObjectType.newObject()
             .name("Trip")
-	    .description("Trip is a occurance of a route at specific time.")
+	    .description("Trip is a specific occurance of a pattern, usually identified by route, direction on the route and exact departure time.")
             .withInterface(nodeInterface)
             .field(GraphQLFieldDefinition.newFieldDefinition()
                 .name("id")
@@ -1656,7 +1657,7 @@ public class IndexGraphQLSchema {
                 .build())
             .field(GraphQLFieldDefinition.newFieldDefinition()
                 .name("directionId")
-                .description("Direction code of the trip, i.e. is this the outbound or inbound trip of a pattern. Possible values: 0, 1.")
+                .description("Direction code of the trip, i.e. is this the outbound or inbound trip of a pattern. Possible values: 0, 1 or `null` if the direction is irrelevant, i.e. the pattern has trips only in one direction.")
                 .type(Scalars.GraphQLString)
                 .build())
             .field(GraphQLFieldDefinition.newFieldDefinition()
@@ -1875,7 +1876,7 @@ public class IndexGraphQLSchema {
                 .build())
             .field(GraphQLFieldDefinition.newFieldDefinition()
                 .name("directionId")
-		        .description("Direction of the pattern. Possible values: 0, 1")
+		        .description("Direction of the pattern. Possible values: 0, 1 or -1.  \n -1 indicates that the direction is irrelevant, i.e. the route has patterns only in one direction.")
                 .type(Scalars.GraphQLInt)
                 .dataFetcher(environment -> ((TripPattern) environment.getSource()).directionId)
                 .build())
@@ -1986,6 +1987,7 @@ public class IndexGraphQLSchema {
 
         routeType = GraphQLObjectType.newObject()
             .name("Route")
+            .description("Route represents a public transportation service, usually from point A to point B and *back*, shown to customers under a single name, e.g. bus 550. Routes contain patterns (see field `patterns`), which describe different variants of the route, e.g. outbound pattern from point A to point B and inbound pattern from point B to point A.")
 	    .withInterface(nodeInterface)
             .field(GraphQLFieldDefinition.newFieldDefinition()
                 .name("id")
@@ -2175,6 +2177,7 @@ public class IndexGraphQLSchema {
 
         bikeRentalStationType = GraphQLObjectType.newObject()
             .name("BikeRentalStation")
+            .description("Bike rental station represents a location where users can rent bicycles for a fee.")
             .withInterface(nodeInterface)
             .withInterface(placeInterface)
             .field(GraphQLFieldDefinition.newFieldDefinition()
@@ -2247,6 +2250,7 @@ public class IndexGraphQLSchema {
 
         bikeParkType = GraphQLObjectType.newObject()
             .name("BikePark")
+            .description("Bike park represents a location where bicycles can be parked.")
             .withInterface(nodeInterface)
             .withInterface(placeInterface)
             .field(GraphQLFieldDefinition.newFieldDefinition()
@@ -2321,6 +2325,7 @@ public class IndexGraphQLSchema {
 
         carParkType = GraphQLObjectType.newObject()
             .name("CarPark")
+            .description("Car park represents a location where cars can be parked.")
             .withInterface(nodeInterface)
             .withInterface(placeInterface)
             .field(GraphQLFieldDefinition.newFieldDefinition()
@@ -2720,7 +2725,7 @@ public class IndexGraphQLSchema {
                     List<TraverseMode> filterByModes = environment.getArgument("filterByModes");
                     List<GraphIndex.PlaceType> filterByPlaceTypes = environment.getArgument("filterByPlaceTypes");
 
-                    List<GraphIndex.PlaceAndDistance> places;
+                    List<PlaceAndDistance> places;
                     try {
                         places = new ArrayList<>(index.findClosestPlacesByWalking(
                             environment.getArgument("lat"),
@@ -2821,15 +2826,23 @@ public class IndexGraphQLSchema {
                 .type(new GraphQLList(routeType))
                 .argument(GraphQLArgument.newArgument()
                     .name("ids")
+                    .description("Only return routes with these ids")
                     .type(new GraphQLList(Scalars.GraphQLString))
                     .build())
                 .argument(GraphQLArgument.newArgument()
                     .name("name")
+                    .description("Query routes by this name")
                     .type(Scalars.GraphQLString)
                     .build())
                 .argument(GraphQLArgument.newArgument()
                     .name("modes")
+                    .description("Deprecated, use argument `transportModes` instead.")
                     .type(Scalars.GraphQLString)
+                    .build())
+                .argument(GraphQLArgument.newArgument()
+                    .name("transportModes")
+                    .description("Only include routes, which use one of these modes")
+                    .type(GraphQLList.list(modeEnum))
                     .build())
                 .dataFetcher(environment -> {
                     if ((environment.getArgument("ids") instanceof List)) {
@@ -2853,7 +2866,7 @@ public class IndexGraphQLSchema {
                                     ((String) environment.getArgument("name")).toLowerCase())
                             );
                     }
-                    if (environment.getArgument("modes") != null) {
+                    if (environment.getArgument("modes") != null && !(environment.getArgument("transportModes") instanceof List)) {
                         Set<TraverseMode> modes = new QualifiedModeSet((String)
                             environment.getArgument("modes")).qModes
                             .stream()
@@ -2864,6 +2877,11 @@ public class IndexGraphQLSchema {
                             .filter(route ->
                                 modes.contains(GtfsLibrary.getTraverseMode(route)));
                     }
+                    if (environment.getArgument("transportModes") instanceof List) {
+                        List<TraverseMode> modes = environment.getArgument("transportModes");
+                        stream = stream.filter(route -> modes.contains(GtfsLibrary.getTraverseMode(route)));
+                    }
+
                     return stream.collect(Collectors.toList());
                 })
                 .build())
@@ -2906,8 +2924,9 @@ public class IndexGraphQLSchema {
                     .build())
                 .argument(GraphQLArgument.newArgument()
                     .name("direction")
-                    .description("Direction of the trip, possible values: 0, 1")
-                    .type(new GraphQLNonNull(Scalars.GraphQLInt))
+                    .description("Direction of the trip, possible values: 0, 1 or -1.  \n -1 indicates that the direction is irrelevant, i.e. in case the route has trips only in one direction. See field `directionId` of Pattern.")
+                    .type(Scalars.GraphQLInt)
+                    .defaultValue(-1)
                     .build())
                 .argument(GraphQLArgument.newArgument()
                     .name("date")

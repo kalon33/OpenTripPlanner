@@ -1,16 +1,3 @@
-/* This program is free software: you can redistribute it and/or
- modify it under the terms of the GNU Lesser General Public License
- as published by the Free Software Foundation, either version 3 of
- the License, or (at your option) any later version.
-
- This program is distributed in the hope that it will be useful,
- but WITHOUT ANY WARRANTY; without even the implied warranty of
- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- GNU General Public License for more details.
-
- You should have received a copy of the GNU General Public License
- along with this program.  If not, see <http://www.gnu.org/licenses/>. */
-
 package org.opentripplanner.routing.edgetype;
 
 import com.google.common.collect.Iterables;
@@ -277,6 +264,13 @@ public class StreetEdge extends Edge implements Cloneable {
         return length_mm / 1000.0; // CONVERT FROM FIXED MILLIMETERS TO FLOAT METERS
     }
 
+    /**
+     * Accessor to retrive the length in mm, for subclasses only.
+     */
+    protected int getLength_mm() {
+        return length_mm;
+    }
+
     @Override
     public State traverse(State s0) {
         final RoutingRequest options = s0.getOptions();
@@ -466,8 +460,8 @@ public class StreetEdge extends Edge implements Cloneable {
             if (traverseMode.equals(TraverseMode.WALK)) {
                 // take slopes into account when walking
                 // FIXME: this causes steep stairs to be avoided. see #1297.
-                double costs = getSlopeWalkSpeedEffectiveLength();
-                weight = costs / speed;
+                double distance = getSlopeWalkSpeedEffectiveLength();
+                weight = distance / speed;
                 time = weight; //treat cost as time, as in the current model it actually is the same (this can be checked for maxSlope == 0)
 
                 if (getStreetClass() == CLASS_STREET || getPermission().allows(TraverseMode.CAR)) {
@@ -478,8 +472,10 @@ public class StreetEdge extends Edge implements Cloneable {
                 /*
                 // debug code
                 if(weight > 100){
-                    double timeflat = length / speed;
-                    System.out.format("line length: %.1f m, slope: %.3f ---> slope costs: %.1f , weight: %.1f , time (flat):  %.1f %n", length, elevationProfile.getMaxSlope(), costs, weight, timeflat);
+                    double timeflat = length_mm / speed;
+
+
+                    System.out.format("line length: %.1f m, slope: %.3f ---> distance: %.1f , weight: %.1f , time (flat):  %.1f %n", getDistance(), getMaxSlope(), distance, weight, timeflat);
                 }
                 */
             }
@@ -1013,12 +1009,7 @@ public class StreetEdge extends Edge implements Cloneable {
                 e2.setStreetClass(this.getStreetClass());
             }
         }
-
-
-
-
-
-        return new P2<StreetEdge>(e1, e2);
+        return new P2<>(e1, e2);
     }
 
     /**
